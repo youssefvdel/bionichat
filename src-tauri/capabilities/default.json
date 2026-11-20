@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "dashboard shell: core APIs only, no filesystem/shell plugin",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

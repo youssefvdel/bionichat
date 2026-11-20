@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"dashboard shell: core APIs only, no filesystem/shell plugin","local":true,"windows":["main"],"permissions":["core:default"]}}

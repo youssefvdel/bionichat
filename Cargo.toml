@@ -1,0 +1,18 @@
+[workspace]
+resolver = "3"
+members = ["src-tauri", "tools/demo-ping", "tools/demo-fs"]
+
+[workspace.dependencies]
+rmcp = { version = "=3.11.0", features = [
+    "client",
+    "server",
+    "transport-child-process",
+    "transport-io",
+    "which-command",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "time"] }
+
+[profile.dev]
+opt-level = 0
