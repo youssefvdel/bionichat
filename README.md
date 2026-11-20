@@ -24,6 +24,19 @@ cargo build --no-default-features --features cef
 `cef` and `wry` are mutually exclusive (gtk4 vs gtk3); the crate refuses to
 build with both.
 
+CEF needs one manual step after the first build — Chromium's SUID sandbox
+helper must be root-owned, otherwise the renderer aborts at startup:
+
+```bash
+sudo chown root:root target/cef/debug/chrome-sandbox
+sudo chmod 4755 target/cef/debug/chrome-sandbox
+```
+
+Verified 2026-11-20: CEF build takes ~5 min and an 8.1 GB `target/cef` (it
+downloads `cef 154.5.0`); the window renders the same dashboard and both demo
+servers handshake. The renderer chip in the header shows which runtime built.
+
+
 ## Layout
 
 ```

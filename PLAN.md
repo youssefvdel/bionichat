@@ -47,4 +47,4 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 ## Open
 - Name lock (chatsudo leads). Google sign-in (moves with chats phase).
 - Scaffold: DONE 2026-11-20 (P1). Default runtime is `wry` so a fresh clone builds without the CEF download; `--features cef` is wired and tested separately. Flip the default once CEF is confirmed on the demo box.
-- CEF gate: does the alpha CEF runtime survive a real window + fonts on this box, and what is its idle RSS vs wry? (needed before chats.)
+- CEF gate: RESOLVED 2026-11-20 — `tauri-runtime-cef` alpha.7 builds and renders the dashboard on this box (gtk4, `chrome-sandbox` setuid step documented). Still open: CEF idle RSS vs wry before chats.

@@ -41,6 +41,8 @@ declare global {
   }
 }
 
+export {};
+
 const bridge = window.__TAURI__;
 
 function qs<T extends Element>(selector: string): T {
