@@ -187,10 +187,10 @@ async fn tunnel_start(app: AppHandle, state: State<'_, AppState>) -> Result<Tunn
 }
 
 #[tauri::command]
-fn tunnel_stop(app: AppHandle, state: State<'_, AppState>) -> TunnelInfo {
-    let info = state.tunnel.stop();
+async fn tunnel_stop(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
+    let info = state.tunnel.stop().await;
     let _ = app.emit("tunnel-updated", info.clone());
-    info
+    Ok(info)
 }
 
 /// Spawn the dashboard refresh in the background so the window paints first.
@@ -250,11 +250,14 @@ pub fn run() {
                 .unwrap_or(DEFAULT_PORT);
             let hub = Hub::new(registry_path.clone(), port);
 
+            let tunnel = TunnelManager::new();
+            tunnel.hydrate();
+
             let rows = specs.iter().map(ServerRow::pending).collect();
             app.manage(AppState {
                 registry_path,
                 hub: hub.clone(),
-                tunnel: TunnelManager::new(),
+                tunnel,
                 inner: Mutex::new(RegistryState { specs, rows }),
             });
 

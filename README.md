@@ -108,15 +108,37 @@ backend; the UI shows key names only.
 ## Tunnel
 
 One click runs `opentunnel route add <port>` (or `$OPENTUNNEL_BIN`), scrapes the
-`https://…` line it prints, then polls `<url>/mcp` for up to 60 s before
-showing `ready`. **`opentunnel` is not installed on this box**, so only the
-missing-binary path is proven live; the URL scrape + cert poll are unit-tested
-but have not run against a real route. Public URL = public: demo data only.
+`https://…` line it prints, then polls `<url>/mcp` with an MCP `ping` for up to
+60 s before showing `ready`.
+
+- **Install** (user-local, no sudo, no account): `npm install -g --prefix "$HOME/.local" opentunnel`
+  → `~/.local/bin/opentunnel` (6.5 MB). Removal: `npm uninstall -g --prefix "$HOME/.local" opentunnel`
+  and `rm -rf ~/.local/state/opentunnel`.
+- **Side effect**: `route add` registers and enables a systemd *user* service
+  (`opentunnel-default.service`) so the tunnel survives reboots. `Stop` runs
+  `opentunnel down`, which stops it and removes that unit. Stop is per-profile,
+  not per-app: it also takes down a tunnel started outside this app.
+- Routes stay configured while stopped, so starting again reuses the same URL.
+- Public URL = public. It serves the hub as-is: demo data only, no auth.
+
+Verified 2026-11-20 on this box (tunnel `kfgepc72im6k.opentunnel.xyz`):
+
+| check | result |
+| --- | --- |
+| app `Start tunnel` | `ready`, URL shown in the card |
+| TLS chain | `ZeroSSL ECC DV SSL CA 2`, openssl verify `0 (ok)` |
+| `POST /mcp tools/list` from the internet | `demo-ping__ping`, `demo-ping__echo`, `demo-fs__fs.read` |
+| `POST /mcp tools/call demo-ping__ping` | `pong` |
+| app `Stop` | service stopped, public URL stops answering |
 
 ## Known gaps (next passes)
 
 - P3: per-tool Allow/Ask/Deny, restart supervision, external-kill detection,
   re-reading the registry when the file changes outside the app.
+- Hub is JSON-RPC over POST only; SSE streaming and `Mcp-Session-Id` are not
+  implemented, so clients that require SSE will not connect.
+- Tool calls through the hub are unbounded: no per-call timeout, and the
+  approvals policy is not enforced yet.
 - HTTP/SSE transports parse and persist but probe returns
   "not wired yet (P2)".
 - Approvals are shown as the default policy only; nothing enforces them yet.

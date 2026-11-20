@@ -8,7 +8,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - Alpha accepted knowingly: pin version, expect churn, v3 brings CEF + official MCP plugin.
 - Shell owns: MCP registry, supervisor (spawn/health), tunnel helper, approvals log.
 - MCP input format: Anthropic format (`{ "mcpServers": { name: {command,args,env} | {url,headers} } }`). Accept paste-JSON + import file (claude_desktop_config.json).
-- Name: pending (round 7 done, chatsudo leads, web re-check open).
+- Name: bionichat (locked 2026-11-20, verified: npm 404, GitHub 0, .com/.dev/.app/.xyz free; neighbor risk LM Studio Bionic noted). Scaffold rename from chatsudo lands after P2.
 - Chats: DEFERRED. No embedded chat windows in v1. Sign-in gate moves with chats.
 
 ## v1 scope (dashboard)
@@ -48,11 +48,13 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P1 DONE 2026-11-20: shell, registry, dashboard, demo servers, tools/list.
 - P2 DONE 2026-11-20: hub `POST /mcp` on 127.0.0.1:8787 (initialize, notifications,
   ping, tools/list union as `server__tool`, tools/call routed over live sessions),
-  tunnel button + URL scrape + cert poll. `opentunnel` is NOT installed here, so
-  the tunnel's live path is unverified; hub is proven with curl.
+  tunnel button + URL scrape + cert poll. `opentunnel 0.6.2` installed user-local
+  (`~/.local/bin`), live proof 2026-11-20: public ZeroSSL-verified URL served
+  tools/list + tools/call, Stop took the service down. Tunnel state is now
+  hydrated from `opentunnel status` at launch.
 - P3 next: approvals (Allow/Ask/Deny), supervision/restart, external-kill detection.
 
 ## Open
-- Name lock (chatsudo leads). Google sign-in (moves with chats phase).
+- Name: bionichat locked. Rename after P2 lands. Google sign-in (moves with chats phase).
 - Scaffold: DONE 2026-11-20 (P1). Default runtime is `wry` so a fresh clone builds without the CEF download; `--features cef` is wired and tested separately. Flip the default once CEF is confirmed on the demo box.
 - CEF gate: RESOLVED 2026-11-20 — `tauri-runtime-cef` alpha.7 builds and renders the dashboard on this box (gtk4, `chrome-sandbox` setuid step documented). Still open: CEF idle RSS vs wry before chats.
