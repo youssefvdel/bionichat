@@ -1,21 +1,25 @@
-//! web-agent shell: dashboard over an MCP server registry.
-//! Pass 1 only: list servers, paste Anthropic JSON, spawn, list tools.
+//! web-agent shell: dashboard over an MCP registry, plus the local hub that
+//! aggregates every registered server behind one StreamableHTTP endpoint.
 
+mod hub;
 mod mcp;
 mod registry;
+mod tunnel;
 
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::{
+    hub::{DEFAULT_PORT, Hub},
     mcp::ToolInfo,
     registry::ServerSpec,
+    tunnel::{TunnelInfo, TunnelManager},
 };
 
 #[cfg(all(feature = "cef", feature = "wry"))]
@@ -59,16 +63,18 @@ impl ServerRow {
 }
 
 #[derive(Debug, Serialize)]
-struct TunnelRow {
-    status: &'static str,
-    public_url: Option<String>,
+struct HubRow {
+    url: String,
+    port: u16,
+    sessions: usize,
     note: &'static str,
 }
 
 #[derive(Debug, Serialize)]
 struct Dashboard {
     servers: Vec<ServerRow>,
-    tunnel: TunnelRow,
+    hub: HubRow,
+    tunnel: TunnelInfo,
     approvals_default: &'static str,
     renderer: &'static str,
     registry_path: String,
@@ -81,6 +87,8 @@ struct RegistryState {
 
 struct AppState {
     registry_path: PathBuf,
+    hub: Arc<Hub>,
+    tunnel: TunnelManager,
     inner: Mutex<RegistryState>,
 }
 
@@ -91,19 +99,20 @@ fn dashboard_of(state: &AppState) -> Dashboard {
     };
     Dashboard {
         servers: guard.rows.clone(),
-        tunnel: TunnelRow {
-            status: "off",
-            public_url: None,
-            note: "OpenTunnel lands in P2",
+        hub: HubRow {
+            url: state.hub.url(),
+            port: state.hub.port(),
+            sessions: state.hub.session_count(),
+            note: "JSON-RPC over POST, no SSE",
         },
+        tunnel: state.tunnel.info(),
         approvals_default: "ask",
         renderer: RENDERER,
         registry_path: state.registry_path.display().to_string(),
     }
 }
 
-/// Probe every registered server sequentially. Demo servers answer in
-/// milliseconds; each probe is capped at 20 s.
+/// Probe every registered server through the hub's persistent sessions.
 async fn probe_all(state: &AppState) -> Vec<ServerRow> {
     let specs = {
         let guard = match state.inner.lock() {
@@ -116,7 +125,7 @@ async fn probe_all(state: &AppState) -> Vec<ServerRow> {
     let mut rows = Vec::with_capacity(specs.len());
     for spec in specs {
         let mut row = ServerRow::pending(&spec);
-        match mcp::list_tools(&spec).await {
+        match state.hub.tools_for(&spec).await {
             Ok(tools) => {
                 row.tools = tools;
                 row.status = Status::Ready;
@@ -170,6 +179,20 @@ async fn add_servers(json: String, state: State<'_, AppState>) -> Result<Vec<Ser
     Ok(rows)
 }
 
+#[tauri::command]
+async fn tunnel_start(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
+    let info = state.tunnel.start(state.hub.port()).await;
+    let _ = app.emit("tunnel-updated", info.clone());
+    Ok(info)
+}
+
+#[tauri::command]
+fn tunnel_stop(app: AppHandle, state: State<'_, AppState>) -> TunnelInfo {
+    let info = state.tunnel.stop();
+    let _ = app.emit("tunnel-updated", info.clone());
+    info
+}
+
 /// Spawn the dashboard refresh in the background so the window paints first.
 fn refresh_in_background(app: &AppHandle) {
     let handle = app.clone();
@@ -221,16 +244,38 @@ pub fn run() {
                 specs
             });
 
+            let port = std::env::var("WEB_AGENT_HUB_PORT")
+                .ok()
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(DEFAULT_PORT);
+            let hub = Hub::new(registry_path.clone(), port);
+
             let rows = specs.iter().map(ServerRow::pending).collect();
             app.manage(AppState {
                 registry_path,
+                hub: hub.clone(),
+                tunnel: TunnelManager::new(),
                 inner: Mutex::new(RegistryState { specs, rows }),
+            });
+
+            let hub_task = hub.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = hub_task.serve().await {
+                    log::error!("hub: {error}");
+                    eprintln!("hub: {error}");
+                }
             });
 
             refresh_in_background(app.handle());
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![dashboard, refresh, add_servers])
+        .invoke_handler(tauri::generate_handler![
+            dashboard,
+            refresh,
+            add_servers,
+            tunnel_start,
+            tunnel_stop
+        ])
         .run(tauri::generate_context!())
         .expect("error while running web-agent");
 }

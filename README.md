@@ -1,8 +1,9 @@
 # web-agent
 
 MCP dashboard shell. Tauri v3 (alpha) + Rust backend, CEF-capable renderer.
-Pass 1 of `PLAN.md`: the dashboard, a real registry, real spawned MCP servers,
-real `tools/list` results. No chats yet, no tunnel yet.
+Passes 1-2 of `PLAN.md`: the dashboard, a real registry, real spawned MCP
+servers, a local hub that aggregates them behind one MCP endpoint, and the
+OpenTunnel button. No chats yet, no approvals enforcement yet.
 
 ## Run
 
@@ -53,9 +54,33 @@ tools/demo-fs             MCP server: fs.read, scoped to the demo root
 
 | command | purpose |
 | --- | --- |
-| `dashboard` | current rows + tunnel/approvals/renderer metadata |
-| `refresh` | re-probe every registered server, return rows |
+| `dashboard` | rows + hub + tunnel + approvals/renderer metadata |
+| `refresh` | re-probe every registered server through the hub sessions |
 | `add_servers { json }` | validate Anthropic JSON, save, spawn, list tools |
+| `tunnel_start` | spawn `opentunnel route add <port>`, scrape URL, poll it |
+| `tunnel_stop` | kill the tunnel child, back to `off` |
+
+## Hub
+
+`http://127.0.0.1:8787/mcp` (override with `WEB_AGENT_HUB_PORT`). JSON-RPC over
+POST, no SSE. Tools are namespaced `server__tool`, so `demo-ping__ping` routes
+to `ping` on the `demo-ping` server over that server's live stdio session.
+
+```bash
+curl -s -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+  http://127.0.0.1:8787/mcp
+
+curl -s -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
+       "params":{"name":"demo-ping__ping","arguments":{}}}' \
+  http://127.0.0.1:8787/mcp
+```
+
+Handled: `initialize`, `notifications/*` (202), `ping`, `tools/list`,
+`tools/call`; anything else returns `-32601`, unknown tool names `-32602`,
+malformed JSON HTTP 400, `GET /mcp` 405. A server that fails to start is left
+out of the union and reported in the dashboard row, not in the hub response.
 
 Rows carry `name`, `transport`, `secret_keys`, `status`
 (`pending`/`ready`/`error`), `error`, `tools`. Env **values** never leave the
@@ -80,10 +105,18 @@ backend; the UI shows key names only.
 | `rmcp` | `=3.11.0` | official Rust MCP SDK (client + server) |
 | `@tauri-apps/cli` (bunx) | `3.0.0-alpha.6` | only needed if `cargo tauri` is absent |
 
+## Tunnel
+
+One click runs `opentunnel route add <port>` (or `$OPENTUNNEL_BIN`), scrapes the
+`https://…` line it prints, then polls `<url>/mcp` for up to 60 s before
+showing `ready`. **`opentunnel` is not installed on this box**, so only the
+missing-binary path is proven live; the URL scrape + cert poll are unit-tested
+but have not run against a real route. Public URL = public: demo data only.
+
 ## Known gaps (next passes)
 
-- P2: hub `POST /mcp` aggregator, OpenTunnel helper, public URL row.
-- P3: per-tool Allow/Ask/Deny, restart supervision, external-kill detection.
+- P3: per-tool Allow/Ask/Deny, restart supervision, external-kill detection,
+  re-reading the registry when the file changes outside the app.
 - HTTP/SSE transports parse and persist but probe returns
   "not wired yet (P2)".
 - Approvals are shown as the default policy only; nothing enforces them yet.

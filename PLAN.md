@@ -44,6 +44,14 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - 2026-11-20 Tauri: v3 is alpha.6 (no beta, no docs) but HAS the CEF renderer + official MCP plugin — user knowingly locks v3 alpha, version pinned. v2 (2.12.7) stays the stable fallback.
 - 2026-11-20 scaffold facts (verified against crates.io + crate sources): CEF is not a `tauri` feature — it is the runtime crate `tauri-runtime-cef 3.0.0-alpha.7`, wired with `Builder::default().runtime(Cef::default())`. It pins `cef =154.5.0`, needs **gtk4** and tauri alpha.6; wry needs gtk3, so the two runtimes cannot be compiled together. `libgtk-4-dev` installed on this box for the CEF path. `tauri-build` has no v3 release past alpha.4. MCP crate: `rmcp 3.11.0` (client `().serve(TokioChildProcess)` + `list_all_tools()`, server `ServerHandler` + `stdio()`).
 
+## Status
+- P1 DONE 2026-11-20: shell, registry, dashboard, demo servers, tools/list.
+- P2 DONE 2026-11-20: hub `POST /mcp` on 127.0.0.1:8787 (initialize, notifications,
+  ping, tools/list union as `server__tool`, tools/call routed over live sessions),
+  tunnel button + URL scrape + cert poll. `opentunnel` is NOT installed here, so
+  the tunnel's live path is unverified; hub is proven with curl.
+- P3 next: approvals (Allow/Ask/Deny), supervision/restart, external-kill detection.
+
 ## Open
 - Name lock (chatsudo leads). Google sign-in (moves with chats phase).
 - Scaffold: DONE 2026-11-20 (P1). Default runtime is `wry` so a fresh clone builds without the CEF download; `--features cef` is wired and tested separately. Flip the default once CEF is confirmed on the demo box.

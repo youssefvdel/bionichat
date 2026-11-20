@@ -18,9 +18,23 @@ interface ServerRow {
   tools: ToolInfo[];
 }
 
+interface TunnelInfo {
+  status: "off" | "starting" | "ready" | "error";
+  public_url: string | null;
+  error: string | null;
+}
+
+interface HubRow {
+  url: string;
+  port: number;
+  sessions: number;
+  note: string;
+}
+
 interface Dashboard {
   servers: ServerRow[];
-  tunnel: { status: string; public_url: string | null; note: string };
+  hub: HubRow;
+  tunnel: TunnelInfo;
   approvals_default: string;
   renderer: string;
   registry_path: string;
@@ -54,10 +68,17 @@ function qs<T extends Element>(selector: string): T {
 const refs = {
   renderer: qs<HTMLSpanElement>("#renderer-chip"),
   refresh: qs<HTMLButtonElement>("#refresh"),
+  hubUrl: qs<HTMLElement>("#hub-url"),
+  hubCopy: qs<HTMLButtonElement>("#hub-copy"),
+  hubSessions: qs<HTMLSpanElement>("#hub-sessions"),
+  hubNote: qs<HTMLElement>("#hub-note"),
   tunnelStatus: qs<HTMLSpanElement>("#tunnel-status"),
   tunnelNote: qs<HTMLParagraphElement>("#tunnel-note"),
   tunnelUrl: qs<HTMLElement>("#tunnel-url"),
+  tunnelCopy: qs<HTMLButtonElement>("#tunnel-copy"),
   tunnelStart: qs<HTMLButtonElement>("#tunnel-start"),
+  tunnelStop: qs<HTMLButtonElement>("#tunnel-stop"),
+  tunnelError: qs<HTMLParagraphElement>("#tunnel-error"),
   serverCount: qs<HTMLSpanElement>("#server-count"),
   servers: qs<HTMLUListElement>("#servers"),
   serversEmpty: qs<HTMLParagraphElement>("#servers-empty"),
@@ -141,10 +162,10 @@ function renderDashboard(data: Dashboard): void {
   refs.renderer.textContent = data.renderer;
   refs.approvals.textContent = data.approvals_default;
   refs.registryPath.textContent = data.registry_path;
-  refs.tunnelStatus.textContent = data.tunnel.status;
-  refs.tunnelNote.textContent = data.tunnel.note;
-  refs.tunnelUrl.textContent = data.tunnel.public_url ?? "no public URL yet";
-  refs.tunnelStart.disabled = true;
+  refs.hubUrl.textContent = data.hub.url;
+  refs.hubSessions.textContent = `${data.hub.sessions} session${data.hub.sessions === 1 ? "" : "s"}`;
+  refs.hubNote.textContent = data.hub.note;
+  renderTunnel(data.tunnel);
   render(data.servers);
 }
 
@@ -200,7 +221,71 @@ async function submit(): Promise<void> {
   }
 }
 
+function renderTunnel(info: TunnelInfo): void {
+  const pill = `pill pill-${info.status === "off" ? "idle" : info.status}`;
+  refs.tunnelStatus.className = pill;
+  refs.tunnelStatus.textContent = info.status;
+  refs.tunnelUrl.textContent = info.public_url ?? "no public URL yet";
+  refs.tunnelCopy.disabled = !info.public_url;
+  const busy = info.status === "starting";
+  refs.tunnelStart.disabled = busy || info.status === "ready";
+  refs.tunnelStart.textContent = busy ? "Starting…" : "Start tunnel";
+  refs.tunnelStop.disabled = !busy && info.status !== "ready";
+  refs.tunnelError.textContent = info.error ?? "";
+  refs.tunnelNote.textContent =
+    info.status === "ready"
+      ? "Public route live. Anyone with this URL can call the hub: demo data only, no auth."
+      : "No public route. The tunnel exposes the hub as-is: demo data only, no auth.";
+}
+
+async function copy(text: string, button: HTMLButtonElement): Promise<void> {
+  const restore = button.textContent;
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    ok = true;
+  } catch {
+    const helper = document.createElement("textarea");
+    helper.value = text;
+    helper.style.position = "fixed";
+    helper.style.opacity = "0";
+    document.body.append(helper);
+    helper.select();
+    ok = document.execCommand("copy");
+    helper.remove();
+  }
+  button.textContent = ok ? "Copied" : "Copy failed";
+  window.setTimeout(() => {
+    button.textContent = restore;
+  }, 1400);
+}
+
+async function tunnelStart(): Promise<void> {
+  if (!bridge) return;
+  refs.tunnelError.textContent = "";
+  refs.tunnelStart.disabled = true;
+  refs.tunnelStart.textContent = "Starting…";
+  try {
+    renderTunnel(await bridge.core.invoke<TunnelInfo>("tunnel_start"));
+  } catch (error) {
+    refs.tunnelError.textContent = String(error);
+    refs.tunnelStart.disabled = false;
+    refs.tunnelStart.textContent = "Start tunnel";
+  }
+}
+
+async function tunnelStop(): Promise<void> {
+  if (!bridge) return;
+  renderTunnel(await bridge.core.invoke<TunnelInfo>("tunnel_stop"));
+}
+
 refs.refresh.addEventListener("click", () => void refresh());
+refs.tunnelStart.addEventListener("click", () => void tunnelStart());
+refs.tunnelStop.addEventListener("click", () => void tunnelStop());
+refs.hubCopy.addEventListener("click", () => void copy(refs.hubUrl.textContent ?? "", refs.hubCopy));
+refs.tunnelCopy.addEventListener("click", () =>
+  void copy(refs.tunnelUrl.textContent ?? "", refs.tunnelCopy),
+);
 refs.addSubmit.addEventListener("click", () => void submit());
 
 refs.addFile.addEventListener("change", () => {
@@ -217,6 +302,9 @@ refs.addFile.addEventListener("change", () => {
 
 if (bridge) {
   void bridge.event.listen<ServerRow[]>("servers-updated", (event) => render(event.payload));
+  void bridge.event.listen<TunnelInfo>("tunnel-updated", (event) =>
+    renderTunnel(event.payload),
+  );
 }
 
 void load();
