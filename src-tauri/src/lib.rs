@@ -1,4 +1,4 @@
-//! web-agent shell: dashboard over an MCP registry, plus the local hub that
+//! bionichat shell: dashboard over an MCP registry, plus the local hub that
 //! aggregates every registered server behind one StreamableHTTP endpoint.
 
 mod hub;
@@ -244,7 +244,7 @@ pub fn run() {
                 specs
             });
 
-            let port = std::env::var("WEB_AGENT_HUB_PORT")
+            let port = std::env::var("BIONICHAT_HUB_PORT")
                 .ok()
                 .and_then(|value| value.parse().ok())
                 .unwrap_or(DEFAULT_PORT);
@@ -280,5 +280,5 @@ pub fn run() {
             tunnel_stop
         ])
         .run(tauri::generate_context!())
-        .expect("error while running web-agent");
+        .expect("error while running bionichat");
 }

@@ -183,7 +183,7 @@ impl Hub {
                     json!({
                         "protocolVersion": protocol,
                         "capabilities": { "tools": { "listChanged": false } },
-                        "serverInfo": { "name": "web-agent-hub", "version": env!("CARGO_PKG_VERSION") },
+                        "serverInfo": { "name": "bionichat-hub", "version": env!("CARGO_PKG_VERSION") },
                         "instructions": "Aggregated MCP hub. Tool names are `server__tool`; unknown names return -32602."
                     }),
                 )
@@ -288,7 +288,7 @@ mod tests {
     fn test_hub(label: &str) -> Arc<Hub> {
         let dir = demo_dir();
         ensure_demo_binaries(&dir);
-        let root = std::env::temp_dir().join("web-agent-tests");
+        let root = std::env::temp_dir().join("bionichat-tests");
         std::fs::create_dir_all(&root).unwrap();
         let registry = root.join(format!("registry-{label}.json"));
         let specs = registry::default_specs(&dir, &root);

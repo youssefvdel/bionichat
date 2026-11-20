@@ -1,4 +1,4 @@
-# web-agent — PLAN (dashboard first, chats later)
+# bionichat — PLAN (dashboard first, chats later)
 
 Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel status, available tools, MCP registry. CEF renderer ready for chats later.
 
@@ -8,7 +8,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - Alpha accepted knowingly: pin version, expect churn, v3 brings CEF + official MCP plugin.
 - Shell owns: MCP registry, supervisor (spawn/health), tunnel helper, approvals log.
 - MCP input format: Anthropic format (`{ "mcpServers": { name: {command,args,env} | {url,headers} } }`). Accept paste-JSON + import file (claude_desktop_config.json).
-- Name: bionichat (locked 2026-11-20, verified: npm 404, GitHub 0, .com/.dev/.app/.xyz free; neighbor risk LM Studio Bionic noted). Scaffold rename from chatsudo lands after P2.
+- Name: bionichat (locked 2026-11-20, verified: npm 404, GitHub 0, .com/.dev/.app/.xyz free; neighbor risk LM Studio Bionic noted). Scaffold rename from chatsudo landed 2026-11-20 (crate `bionichat`, lib `bionichat_lib`, identifier `com.bionichat.app`).
 - Chats: DEFERRED. No embedded chat windows in v1. Sign-in gate moves with chats.
 
 ## v1 scope (dashboard)
@@ -55,6 +55,6 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P3 next: approvals (Allow/Ask/Deny), supervision/restart, external-kill detection.
 
 ## Open
-- Name: bionichat locked. Rename after P2 lands. Google sign-in (moves with chats phase).
+- Name: bionichat locked and applied to crate, productName, identifier and window title 2026-11-20. Google sign-in (moves with chats phase).
 - Scaffold: DONE 2026-11-20 (P1). Default runtime is `wry` so a fresh clone builds without the CEF download; `--features cef` is wired and tested separately. Flip the default once CEF is confirmed on the demo box.
 - CEF gate: RESOLVED 2026-11-20 — `tauri-runtime-cef` alpha.7 builds and renders the dashboard on this box (gtk4, `chrome-sandbox` setuid step documented). Still open: CEF idle RSS vs wry before chats.

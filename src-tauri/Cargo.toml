@@ -1,5 +1,5 @@
 [package]
-name = "web-agent"
+name = "bionichat"
 version = "0.1.0"
 description = "MCP dashboard shell (Tauri v3 + CEF)"
 authors = ["Youssef"]
@@ -7,7 +7,7 @@ edition = "2024"
 rust-version = "1.95"
 
 [lib]
-name = "web_agent_lib"
+name = "bionichat_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

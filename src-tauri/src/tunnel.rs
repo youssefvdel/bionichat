@@ -375,7 +375,7 @@ mod tests {
         let _env = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Empty PATH: `which("opentunnel")` must fail and the UI must say so.
         let original = std::env::var_os("PATH");
-        let empty = std::env::temp_dir().join("web-agent-empty-path");
+        let empty = std::env::temp_dir().join("bionichat-empty-path");
         std::fs::create_dir_all(&empty).unwrap();
         unsafe {
             std::env::set_var("PATH", &empty);

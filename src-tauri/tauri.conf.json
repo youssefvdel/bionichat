@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "web-agent",
+  "productName": "bionichat",
   "version": "0.1.0",
-  "identifier": "dev.youssef.web-agent",
+  "identifier": "com.bionichat.app",
   "build": {
     "frontendDist": "../dist",
     "beforeDevCommand": "bun run build && cargo build -p demo-ping -p demo-fs",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "web-agent",
+        "title": "bionichat",
         "width": 1024,
         "height": 720,
         "minWidth": 720,

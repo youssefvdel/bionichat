@@ -1,4 +1,4 @@
-// Dashboard for web-agent pass 1: registry-backed MCP server list.
+// Dashboard for bionichat pass 1: registry-backed MCP server list.
 // No framework, no npm deps — bun compiles this to dist/main.js.
 
 type Status = "pending" | "ready" | "error";

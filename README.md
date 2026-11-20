@@ -1,4 +1,4 @@
-# web-agent
+# bionichat
 
 MCP dashboard shell. Tauri v3 (alpha) + Rust backend, CEF-capable renderer.
 Passes 1-2 of `PLAN.md`: the dashboard, a real registry, real spawned MCP
@@ -62,7 +62,7 @@ tools/demo-fs             MCP server: fs.read, scoped to the demo root
 
 ## Hub
 
-`http://127.0.0.1:8787/mcp` (override with `WEB_AGENT_HUB_PORT`). JSON-RPC over
+`http://127.0.0.1:8787/mcp` (override with `BIONICHAT_HUB_PORT`). JSON-RPC over
 POST, no SSE. Tools are namespaced `server__tool`, so `demo-ping__ping` routes
 to `ping` on the `demo-ping` server over that server's live stdio session.
 

@@ -1,5 +1,5 @@
 //! demo-fs: read-only, scoped filesystem server for the P1 dashboard.
-//! The root comes from argv[1] (or `WEB_AGENT_DEMO_ROOT`); every path is
+//! The root comes from argv[1] (or `BIONICHAT_DEMO_ROOT`); every path is
 //! canonicalised and must stay inside that root.
 
 use std::{path::{Path, PathBuf}, sync::Arc};
@@ -106,8 +106,8 @@ impl ServerHandler for FsServer {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = std::env::args()
         .nth(1)
-        .or_else(|| std::env::var("WEB_AGENT_DEMO_ROOT").ok())
-        .ok_or("demo-fs needs a root directory as argv[1] or WEB_AGENT_DEMO_ROOT")?;
+        .or_else(|| std::env::var("BIONICHAT_DEMO_ROOT").ok())
+        .ok_or("demo-fs needs a root directory as argv[1] or BIONICHAT_DEMO_ROOT")?;
     let root = Path::new(&root);
     std::fs::create_dir_all(root)?;
     let root = root.canonicalize()?;
