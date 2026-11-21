@@ -17,15 +17,15 @@ export function Mark({ size = 18 }: { size?: number }) {
 }
 
 const pillFor: Record<string, string> = {
-  pending: "bg-[#2a2416] text-[#d9a441]",
-  ready: "bg-[#1b2828] text-[#5fc39c]",
-  error: "bg-[#2c1a20] text-[#e5566f]",
-  starting: "bg-[#212023] text-[#bdbdc0]",
-  off: "bg-[#212023] text-[#bdbdc0]",
-  idle: "bg-[#212023] text-[#bdbdc0]",
-  ok: "bg-[#1b2828] text-[#5fc39c]",
-  denied: "bg-[#2c1a20] text-[#e5566f]",
-  timeout: "bg-[#212023] text-[#bdbdc0]",
+  pending: "bg-raised text-warn",
+  ready: "bg-raised text-good",
+  error: "bg-raised text-bad",
+  starting: "bg-raised text-dim",
+  off: "bg-raised text-dim",
+  idle: "bg-raised text-dim",
+  ok: "bg-raised text-good",
+  denied: "bg-raised text-bad",
+  timeout: "bg-raised text-dim",
 };
 
 export function Pill({ status, label }: { status: string; label?: string }) {

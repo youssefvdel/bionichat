@@ -26,6 +26,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P5: Tauri approval gate (ask/session-allow/deny), link revoke with fresh URL on next start.
 - P6: live activity feed on the main page.
 - P7: data-terminal dark restyle; hub-spur logo concepts (A1 refined + power-b finalists).
+- P10: calm light theme (achromatic-ledger: paper ground, ink text, blue reserved for live data). Dropped neon green + entrance cascade per design-skill calibration.
 - P9: React + Vite + Tailwind UI with custom title bar (logo mark, min/max/close wired through backend commands; native decorations off). Same commands, same gate, same live proof.
 - P8: skill manager — `skill` tool lists/loads playbooks from the `.agents` folder (`skills/<name>/SKILL.md`) plus a built-in `bionichat` skill. Read-only.
 

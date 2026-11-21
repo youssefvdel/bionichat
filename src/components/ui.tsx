@@ -49,7 +49,7 @@ export function ActionButton({
         small ? "min-h-7 px-3 text-xs" : "min-h-[34px] px-4 text-[13px]"
       } ${
         primary
-          ? "border-accent bg-accent font-semibold text-accentink hover:brightness-110"
+          ? "border-ink bg-ink font-semibold text-ground hover:opacity-90"
           : "border-control bg-transparent text-ink hover:border-accent active:translate-y-px"
       }`}
     >

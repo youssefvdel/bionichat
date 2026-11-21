@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ground: #171719;
-  --color-surface: #131217;
-  --color-raised: #212023;
-  --color-edge: #222224;
-  --color-rule: #1b1a1f;
-  --color-control: #3a3a3e;
-  --color-ink: #ffffff;
-  --color-dim: #8a8c92;
-  --color-accent: #4a8ad6;
-  --color-accentink: #0b0e14;
-  --color-good: #44a282;
-  --color-bad: #e5566f;
-  --color-warn: #d9a441;
+  --color-ground: #f1f0ec;
+  --color-surface: #ffffff;
+  --color-raised: #f7f7f4;
+  --color-edge: #e2e1dc;
+  --color-rule: #ecebe6;
+  --color-control: #d4d3cc;
+  --color-ink: #1a1c19;
+  --color-dim: #68705f;
+  --color-accent: #1d5fbf;
+  --color-accentink: #ffffff;
+  --color-good: #1d7a4f;
+  --color-bad: #b3372f;
+  --color-warn: #9a6a00;
   --font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
 }
@@ -69,6 +69,17 @@ details.tools > summary::before {
 }
 details.tools[open] > summary::before {
   content: "▾";
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+.animate-row-in {
+  animation: row-in 0.3s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
