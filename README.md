@@ -1,9 +1,9 @@
 # bionichat
 
 MCP dashboard shell. Tauri v3 (alpha) + Rust backend, CEF-capable renderer.
-Passes 1-2 of `PLAN.md`: the dashboard, a real registry, real spawned MCP
-servers, a local hub that aggregates them behind one MCP endpoint, and the
-OpenTunnel button. No chats yet, no approvals enforcement yet.
+Passes 1-3 of `PLAN.md`: the dashboard, a real registry, real spawned MCP
+servers, a local hub that aggregates them behind one MCP endpoint, the
+OpenTunnel button, per-tool approval policy, and supervision. No chats yet.
 
 ## Run
 
@@ -25,17 +25,27 @@ cargo build --no-default-features --features cef
 `cef` and `wry` are mutually exclusive (gtk4 vs gtk3); the crate refuses to
 build with both.
 
-CEF needs one manual step after the first build — Chromium's SUID sandbox
-helper must be root-owned, otherwise the renderer aborts at startup:
+CEF needs Chromium's SUID sandbox helper to be root-owned, otherwise the
+renderer aborts at startup. The build already installs a correct helper under
+`target/cef/debug/`, so run the app through the wrapper — it hides the
+non-setuid copy the build also drops beside the binary and points
+`CHROME_DEVEL_SANDBOX` at the real one, no sudo needed:
 
 ```bash
-sudo chown root:root target/cef/debug/chrome-sandbox
-sudo chmod 4755 target/cef/debug/chrome-sandbox
+scripts/run-cef.sh            # same binary, CEF sandbox satisfied
 ```
 
-Verified 2026-11-20: CEF build takes ~5 min and an 8.1 GB `target/cef` (it
-downloads `cef 154.5.0`); the window renders the same dashboard and both demo
-servers handshake. The renderer chip in the header shows which runtime built.
+If you prefer the manual route instead:
+
+```bash
+sudo chown root:root target/debug/chrome-sandbox
+sudo chmod 4755 target/debug/chrome-sandbox
+```
+
+Verified 2026-11-21: the CEF build renders the full P3 dashboard (policy
+dropdowns, restart button, auto-restart toggle, approvals banner); build takes
+~4 min and an 8.1 GB `target/cef` (downloads `cef 154.5.0`). The renderer chip
+in the header shows which runtime built ("cef" or "wry").
 
 
 ## Layout
