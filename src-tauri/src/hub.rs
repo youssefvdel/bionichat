@@ -59,6 +59,15 @@ pub struct ActivityEntry {
     pub duration_ms: u64,
 }
 
+/// A call that has started, so the dashboard can light its path up live.
+#[derive(Debug, Clone, Serialize)]
+pub struct CallStart {
+    pub server: String,
+    pub tool: String,
+    pub arguments: Option<Map<String, Value>>,
+    pub at_ms: u64,
+}
+
 /// What the dashboard shows for an open approval prompt.
 #[derive(Debug, Clone, Serialize)]
 pub struct PendingView {
@@ -468,6 +477,20 @@ impl Hub {
         };
 
         let started = std::time::Instant::now();
+        if let Some(app) = &self.app {
+            let _ = app.emit(
+                "tool-start",
+                CallStart {
+                    server: server.clone(),
+                    tool: tool.clone(),
+                    arguments: arguments.clone(),
+                    at_ms: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or_default(),
+                },
+            );
+        }
         let registry = self.registry();
         let spec = registry.server(&server).cloned().ok_or_else(|| {
             self.note(&server, &tool, &arguments, started, "error", Some("no registered server".into()));

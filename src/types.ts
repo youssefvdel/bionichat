@@ -36,6 +36,13 @@ export interface ActivityEntry {
   duration_ms: number;
 }
 
+export interface CallStart {
+  server: string;
+  tool: string;
+  arguments: Record<string, unknown> | null;
+  at_ms: number;
+}
+
 export interface TunnelInfo {
   status: "off" | "starting" | "ready" | "error";
   public_url: string | null;

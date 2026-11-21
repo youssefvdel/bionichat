@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ActivityEntry, Dashboard, Pending, ServerRow, TunnelInfo } from "./types";
+import type { ActivityEntry, CallStart, Dashboard, Pending, ServerRow, TunnelInfo } from "./types";
 import { invoke, bridge } from "./tauri";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar, type View } from "./components/Sidebar";
 import { Overview } from "./views/Overview";
 import { Projects } from "./views/Projects";
 import { Settings } from "./views/Settings";
+import type { FlashState, RunningCall } from "./components/ToolFlow";
 
 export default function App() {
   const [view, setView] = useState<View>("overview");
   const [renderer, setRenderer] = useState("—");
-  const [hubUrl, setHubUrl] = useState("—");
   const [hubSessions, setHubSessions] = useState(0);
   const [tunnel, setTunnel] = useState<TunnelInfo>({ status: "off", public_url: null, error: null });
   const [approvals, setApprovals] = useState<Pending[]>([]);
@@ -18,6 +18,8 @@ export default function App() {
   const [servers, setServers] = useState<ServerRow[] | null>(null);
   const [registryPath, setRegistryPath] = useState("—");
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [running, setRunning] = useState<RunningCall[]>([]);
+  const [flash, setFlash] = useState<FlashState>({});
   const [loadError, setLoadError] = useState("");
   const activityRef = useRef<ActivityEntry[]>([]);
   activityRef.current = activity;
@@ -26,7 +28,6 @@ export default function App() {
     setRenderer(data.renderer);
     setApprovalsDefault(data.approvals_default);
     setRegistryPath(data.registry_path);
-    setHubUrl(data.hub.url);
     setHubSessions(data.hub.sessions);
     setTunnel(data.tunnel);
     setApprovals(data.approvals);
@@ -69,9 +70,43 @@ export default function App() {
         })
         .then((off) => unlistens.push(off));
       void b.event
+        .listen<CallStart>("tool-start", (e) => {
+          if (cancelled) return;
+          const call = e.payload;
+          setRunning((prev) => [
+            ...prev,
+            {
+              key: `${call.server}::${call.tool}`,
+              server: call.server,
+              tool: call.tool,
+              arguments: call.arguments,
+              at: call.at_ms,
+            },
+          ]);
+        })
+        .then((off) => unlistens.push(off));
+      void b.event
         .listen<ActivityEntry>("tool-activity", (e) => {
           if (cancelled) return;
-          setActivity([e.payload, ...activityRef.current].slice(0, 50));
+          const entry = e.payload;
+          setActivity([entry, ...activityRef.current].slice(0, 50));
+          const key = `${entry.server}::${entry.tool}`;
+          const mark = entry.status === "ok" ? "ok" : "error";
+          setFlash((prev) => ({ ...prev, [key]: mark }));
+          window.setTimeout(() => {
+            setFlash((prev) => {
+              if (prev[key] !== mark) return prev;
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            });
+          }, 6000);
+          setRunning((prev) => {
+            const key = `${entry.server}::${entry.tool}`;
+            const index = prev.findIndex((call) => call.key === key);
+            if (index === -1) return prev;
+            return [...prev.slice(0, index), ...prev.slice(index + 1)];
+          });
         })
         .then((off) => unlistens.push(off));
       void invoke<ActivityEntry[]>("activity")
@@ -115,10 +150,11 @@ export default function App() {
           {view === "overview" && (
             <Overview
               tunnel={tunnel}
-              hubUrl={hubUrl}
               hubSessions={hubSessions}
               servers={servers}
               activity={activity}
+              running={running}
+              flash={flash}
               approvals={approvals}
               onApprovals={setApprovals}
               onOpenSettings={() => setView("settings")}

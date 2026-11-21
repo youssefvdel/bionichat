@@ -56,14 +56,36 @@ in the header shows which runtime built ("cef" or "wry").
 ## Layout
 
 ```
-src-tauri/src/lib.rs      app setup, state, three commands
+src-tauri/src/lib.rs      app setup, state, commands
 src-tauri/src/registry.rs Anthropic JSON parsing + registry.json persistence
-src-tauri/src/mcp.rs      rmcp client: spawn → handshake → tools/list
-src/                      dashboard source (TypeScript, no framework)
-dist/                     static shell + bun build output
-tools/demo-ping           MCP server: ping, echo (read-only)
-tools/demo-fs             MCP server: fs.read, scoped to the demo root
+src-tauri/src/mcp.rs      rmcp client: spawn → handshake → tools/list → call
+src-tauri/src/hub.rs      one MCP endpoint over every server, policy, activity
+src-tauri/src/tunnel.rs   opentunnel route lifecycle
+src/                      dashboard source (React + Vite + Tailwind)
+  views/                  Overview, Projects, Settings
+  components/ToolFlow.tsx live graph of hub → servers → tools
+  components/LiveRail.tsx running and recent calls
+tools/fs                  MCP server: read, write, edit
+tools/bash                MCP server: bash
+tools/skill               MCP server: skill (list + read from .agents/skills)
+dist/                     bun run build output
 ```
+
+## The live map
+
+Overview draws the hub, every project and every tool as a graph, and lights
+the path up while a call is in flight.
+
+- The hub emits `tool-start` the moment a call arrives, before policy runs,
+  and `tool-activity` when it finishes. The graph marks the tool blue with a
+  dashed edge from the hub while it runs.
+- A finished call keeps a ring for 6 seconds (green ok, red failure), then
+  fades. Nothing stays coloured forever.
+- Navigation is custom, so it works in the embedded CEF window: pan and zoom
+  the canvas, click a tool for its description.
+- `bun run debug-page` writes `dist/_debug.html`: the real bundle against
+  fixture data, so the UI can be driven in a normal browser with DevTools.
+
 
 ## Commands (Tauri IPC)
 

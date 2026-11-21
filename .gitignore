@@ -4,3 +4,4 @@ dist/main.js
 dist/main.js.map
 *.log
 .DS_Store
+dist/_debug.html
