@@ -32,6 +32,7 @@ use crate::{
     policy,
     registry::{self, Decision, Registry, ServerSpec},
 };
+use rmcp::model::ContentBlock;
 
 pub const DEFAULT_PORT: u16 = 8787;
 pub const SEPARATOR: &str = "__";
@@ -434,12 +435,19 @@ impl Hub {
             .session_for(&spec)
             .await
             .map_err(|error| (-32603, error))?;
-        let result = mcp::call_tool(&client, &tool, arguments)
+        let mut result = mcp::call_tool(&client, &tool, arguments)
             .await
             .map_err(|error| {
                 self.forget(&spec.name);
                 (-32603, error)
             })?;
+        // Time-awareness: every result carries the server clock, so a
+        // remote agent always knows *when* it observed something.
+        result.content.push(ContentBlock::text(format!(
+            "[server time {} (local) = {}]",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z"),
+            chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
+        )));
         serde_json::to_value(result).map_err(|e| (-32603, e.to_string()))
     }
 
@@ -471,7 +479,7 @@ impl Hub {
                         "protocolVersion": protocol,
                         "capabilities": { "tools": { "listChanged": false } },
                         "serverInfo": { "name": "bionichat-hub", "version": env!("CARGO_PKG_VERSION") },
-                        "instructions": "Aggregated MCP hub. Tool names are `server__tool`; unknown names return -32602, policy denials -32001, approval timeouts -32002."
+                        "instructions": "Aggregated MCP hub. Bare tool names while unique, `server__tool` on collision; unknown names return -32602, policy denials -32001, approval timeouts -32002. Every result carries a server-time stamp."
                     }),
                 )
             }
@@ -884,6 +892,42 @@ mod tests {
                 .and_then(Value::as_str)
                 .is_some_and(|text| text.contains("wrote 1 bytes")),
             "approved write must succeed: {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn every_result_carries_server_time() {
+        let hub = test_hub("time");
+        hub.registry_mut_allow("bash", "bash");
+        let (_, list) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}))
+            .await;
+        assert!(list.expect("list body").get("error").is_none());
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"bash","arguments":{"command":"echo timed"}}
+            }))
+            .await;
+        let body = body.expect("call body");
+        assert!(body.get("error").is_none(), "unexpected error: {body}");
+        let texts: Vec<&str> = body
+            .pointer("/result/content")
+            .and_then(serde_json::Value::as_array)
+            .expect("content array")
+            .iter()
+            .filter_map(|block| block.get("text").and_then(serde_json::Value::as_str))
+            .collect();
+        assert!(
+            texts.len() >= 2,
+            "stamped result needs the tool output plus a time block: {body}"
+        );
+        let stamp = texts.last().expect("time block");
+        assert!(
+            stamp.starts_with("[server time ")
+                && stamp.contains(" (local) = ")
+                && stamp.ends_with(']'),
+            "last block must be the server-time stamp, got: {stamp}"
         );
     }
 

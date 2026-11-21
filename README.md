@@ -76,7 +76,9 @@ tools/demo-fs             MCP server: fs.read, scoped to the demo root
 ## Hub
 
 `http://127.0.0.1:8787/mcp` (override with `BIONICHAT_HUB_PORT`). JSON-RPC over
-POST, no SSE. Tools keep their plain names while unique (`read`, `bash`); on a collision they fall back to `server__tool`.
+POST, no SSE. Every tool result carries a server-time stamp (`[server time <local> = <UTC>]`) so web agents stay time-aware.
+
+Tools keep their plain names while unique (`read`, `bash`); on a collision they fall back to `server__tool`.
 Calls route to the owning server over its live stdio session.
 
 ```bash
