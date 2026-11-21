@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["src-tauri", "tools/demo-ping", "tools/demo-fs"]
+members = ["src-tauri", "tools/fs", "tools/bash"]
 
 [workspace.dependencies]
 rmcp = { version = "=3.11.0", features = [

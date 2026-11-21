@@ -248,7 +248,7 @@ impl Hub {
                                 Some(description) => format!("[{}] {description}", spec.name),
                                 None => format!("[{}]", spec.name),
                             },
-                            "inputSchema": { "type": "object" },
+                            "inputSchema": tool.input_schema,
                             "annotations": { "readOnlyHint": tool.read_only },
                             "policy": decision_name(decision),
                         }));
@@ -510,12 +510,12 @@ mod tests {
     }
 
     fn ensure_demo_binaries(dir: &Path) {
-        for name in ["demo-ping", "demo-fs"] {
+        for name in ["fs", "bash"] {
             if dir.join(name).exists() {
                 continue;
             }
             let status = std::process::Command::new("cargo")
-                .args(["build", "-p", "demo-ping", "-p", "demo-fs", "--quiet"])
+                .args(["build", "-p", "fs", "-p", "bash", "--quiet"])
                 .current_dir(env!("CARGO_MANIFEST_DIR"))
                 .status()
                 .expect("cargo build for demo servers");
@@ -545,18 +545,148 @@ mod tests {
             .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}))
             .await;
         assert_eq!(status, StatusCode::OK);
-        let names: Vec<String> = body
+        let tools = body
             .expect("body")
             .pointer("/result/tools")
             .and_then(Value::as_array)
             .expect("tools array")
+            .clone();
+        let names: Vec<String> = tools
             .iter()
             .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_string))
             .collect();
         assert_eq!(
             names,
-            vec!["demo-ping__ping", "demo-ping__echo", "demo-fs__fs.read"]
+            vec![
+                "fs__read",
+                "fs__list",
+                "fs__write",
+                "fs__edit",
+                "bash__bash",
+            ]
         );
+        // The hub forwards the real schemas, so web clients know the params.
+        let write_tool = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("fs__write"))
+            .expect("write in union");
+        assert_eq!(
+            write_tool.pointer("/inputSchema/required"),
+            Some(&json!(["path", "content"])),
+            "write's required params must reach the client: {write_tool}"
+        );
+        let edit_tool = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("fs__edit"))
+            .expect("edit in union");
+        assert_eq!(
+            edit_tool.pointer("/inputSchema/required"),
+            Some(&json!(["path", "oldString", "newString"])),
+            "edit's required params must reach the client: {edit_tool}"
+        );
+        assert!(
+            write_tool.pointer("/annotations/readOnlyHint") == Some(&json!(false)),
+            "write must be marked mutating: {write_tool}"
+        );
+        assert_eq!(
+            write_tool.pointer("/policy"),
+            Some(&json!("ask")),
+            "write must default to ask: {write_tool}"
+        );
+        let bash_tool = tools
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("bash__bash"))
+            .expect("bash in union");
+        assert_eq!(
+            bash_tool.pointer("/inputSchema/required"),
+            Some(&json!(["command"])),
+            "bash's required params must reach the client: {bash_tool}"
+        );
+    }
+
+    #[tokio::test]
+    async fn bash_executes_and_reports() {
+        let hub = test_hub("exec");
+        hub.registry_mut_allow("bash", "bash");
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"bash__bash","arguments":{"command":"echo hello-p4"}}
+            }))
+            .await;
+        let body = body.expect("body");
+        assert!(body.get("error").is_none(), "unexpected error: {body}");
+        let text = body
+            .pointer("/result/content/0/text")
+            .and_then(Value::as_str)
+            .expect("report text");
+        let report: Value = serde_json::from_str(text).expect("report is JSON");
+        assert_eq!(report.pointer("/exit_code"), Some(&json!(0)));
+        assert!(
+            report
+                .pointer("/stdout")
+                .and_then(Value::as_str)
+                .is_some_and(|out| out.contains("hello-p4")),
+            "stdout must carry the command output: {report}"
+        );
+    }
+
+    #[tokio::test]
+    async fn bash_is_ask_by_default() {
+        let hub = test_hub("exec-ask").with_timeout(Duration::from_millis(50));
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"bash__bash","arguments":{"command":"echo nope"}}
+            }))
+            .await;
+        let body = body.expect("body");
+        assert_eq!(
+            body.pointer("/error/code"),
+            Some(&json!(-32002)),
+            "unanswered bash must time out, never run: {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_read_roundtrip() {
+        let hub = test_hub("write");
+        hub.registry_mut_allow("fs", "write");
+        hub.registry_mut_allow("fs", "read");
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"fs__write","arguments":{"path":"note.txt","content":"hi p4"}}
+            }))
+            .await;
+        let body = body.expect("body");
+        assert!(body.get("error").is_none(), "unexpected error: {body}");
+        let (_, read) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":3,"method":"tools/call",
+                "params":{"name":"fs__read","arguments":{"path":"note.txt"}}
+            }))
+            .await;
+        let read = read.expect("read body");
+        assert!(
+            read.pointer("/result/content/0/text")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|text| text.ends_with("1: hi p4")),
+            "written file must read back numbered: {read}"
+        );
+    }
+    /// Test-only shortcut: allow one tool so the test exercises the tool
+    /// itself instead of the approval prompt.
+    trait AllowTool {
+        fn registry_mut_allow(&self, server: &str, tool: &str);
+    }
+
+    impl AllowTool for Arc<Hub> {
+        fn registry_mut_allow(&self, server: &str, tool: &str) {
+            let mut registry = self.registry();
+            registry.set_policy(server, tool, Decision::Allow);
+            registry::save(&self.registry_path, &registry).expect("write test policy");
+        }
     }
 
     #[tokio::test]
@@ -571,29 +701,24 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"demo-ping__ping","arguments":{}}
+                "params":{"name":"fs__list","arguments":{"path":"."}}
             }))
             .await;
         let body = body.expect("body");
         assert!(body.get("error").is_none(), "unexpected error: {body}");
-        assert_eq!(
-            body.pointer("/result/content/0/text")
-                .and_then(Value::as_str),
-            Some("pong")
-        );
     }
 
     #[tokio::test]
     async fn denied_tool_returns_32001_without_starting_the_server() {
         let hub = test_hub("deny");
         let mut registry = hub.registry();
-        registry.set_policy("demo-ping", "echo", Decision::Deny);
+        registry.set_policy("bash", "bash", Decision::Deny);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"demo-ping__echo","arguments":{"text":"should not run"}}
+                "params":{"name":"bash__bash","arguments":{"command":"should not run"}}
             }))
             .await;
         assert_eq!(
@@ -607,13 +732,13 @@ mod tests {
     async fn ask_without_an_answer_times_out_with_32002() {
         let hub = test_hub("ask").with_timeout(Duration::from_millis(150));
         let mut registry = hub.registry();
-        registry.set_policy("demo-ping", "ping", Decision::Ask);
+        registry.set_policy("fs", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":4,"method":"tools/call",
-                "params":{"name":"demo-ping__ping","arguments":{}}
+                "params":{"name":"fs__write","arguments":{"path":"deny-me.txt","content":"x"}}
             }))
             .await;
         assert_eq!(
@@ -626,7 +751,7 @@ mod tests {
     async fn answered_prompt_runs_the_tool() {
         let hub = test_hub("approve").with_timeout(Duration::from_secs(5));
         let mut registry = hub.registry();
-        registry.set_policy("demo-ping", "ping", Decision::Ask);
+        registry.set_policy("fs", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let task = {
@@ -634,7 +759,7 @@ mod tests {
             tokio::spawn(async move {
                 hub.handle_rpc(json!({
                     "jsonrpc":"2.0","id":5,"method":"tools/call",
-                    "params":{"name":"demo-ping__ping","arguments":{}}
+                    "params":{"name":"fs__write","arguments":{"path":"deny-me.txt","content":"x"}}
                 }))
                 .await
             })
@@ -652,18 +777,76 @@ mod tests {
         let (_, body) = task.await.expect("task");
         let body = body.expect("body");
         assert!(body.get("error").is_none(), "unexpected error: {body}");
-        assert_eq!(
+        assert!(
             body.pointer("/result/content/0/text")
-                .and_then(Value::as_str),
-            Some("pong")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains("wrote 1 bytes")),
+            "approved write must succeed: {body}"
         );
     }
+
+    #[tokio::test]
+    async fn edit_roundtrip() {
+        let hub = test_hub("edit");
+        hub.registry_mut_allow("fs", "write");
+        hub.registry_mut_allow("fs", "edit");
+        hub.registry_mut_allow("fs", "read");
+        let (_, wrote) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"fs__write","arguments":{"path":"edit-me.txt","content":"line one\nline two\n"}}
+            }))
+            .await;
+        assert!(wrote.expect("write body").get("error").is_none());
+        // ambiguous without replaceAll
+        let (_, vague) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":3,"method":"tools/call",
+                "params":{"name":"fs__edit","arguments":{"path":"edit-me.txt","oldString":"line","newString":"row"}}
+            }))
+            .await;
+        let vague = vague.expect("vague body");
+        assert!(
+            vague.pointer("/result/content/0/text")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|text| text.contains("matches 2 times")),
+            "ambiguous edit must refuse: {vague}"
+        );
+        // exact single match works
+        let (_, edited) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":4,"method":"tools/call",
+                "params":{"name":"fs__edit","arguments":{"path":"edit-me.txt","oldString":"line two","newString":"row two"}}
+            }))
+            .await;
+        let edited = edited.expect("edited body");
+        assert!(
+            edited.pointer("/result/content/0/text")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|text| text.contains("replaced 1 occurrence")),
+            "exact edit must succeed: {edited}"
+        );
+        let (_, read) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":5,"method":"tools/call",
+                "params":{"name":"fs__read","arguments":{"path":"edit-me.txt"}}
+            }))
+            .await;
+        let read = read.expect("read body");
+        assert!(
+            read.pointer("/result/content/0/text")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|text| text.contains("2: row two")),
+            "edit must persist numbered: {read}"
+        );
+    }
+
 
     #[tokio::test]
     async fn denied_prompt_returns_32001() {
         let hub = test_hub("prompt-deny").with_timeout(Duration::from_secs(5));
         let mut registry = hub.registry();
-        registry.set_policy("demo-ping", "ping", Decision::Ask);
+        registry.set_policy("fs", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let task = {
@@ -671,7 +854,7 @@ mod tests {
             tokio::spawn(async move {
                 hub.handle_rpc(json!({
                     "jsonrpc":"2.0","id":6,"method":"tools/call",
-                    "params":{"name":"demo-ping__ping","arguments":{}}
+                    "params":{"name":"fs__write","arguments":{"path":"deny-me.txt","content":"x"}}
                 }))
                 .await
             })

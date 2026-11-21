@@ -8,6 +8,7 @@ interface ToolInfo {
   name: string;
   description: string | null;
   read_only: boolean;
+  input_schema: Record<string, unknown>;
   policy: Decision;
 }
 
@@ -126,6 +127,13 @@ const POLICY_LABELS: Array<[Decision, string]> = [
   ["deny", "Deny"],
 ];
 
+function requiredList(tool: ToolInfo): string {
+  const schema = tool.input_schema as { required?: unknown } | null;
+  const required = Array.isArray(schema?.required) ? (schema.required as unknown[]) : [];
+  const names = required.filter((name): name is string => typeof name === "string");
+  return names.length > 0 ? ` — needs ${names.join(", ")}` : "";
+}
+
 function policySelect(row: ServerRow, tool: ToolInfo): HTMLSelectElement {
   const select = el("select", "policy");
   select.dataset.server = row.name;
@@ -189,6 +197,7 @@ function serverNode(row: ServerRow): HTMLLIElement {
     const list = el("ul", "tool-list");
     for (const tool of row.tools) {
       const li = el("li", "tool");
+      li.title = `${tool.name}${requiredList(tool)}`;
       li.append(el("span", "tool-name", tool.name));
       if (tool.read_only) li.append(el("span", "secret", "read-only"));
       if (tool.description) li.append(el("span", "tool-desc", tool.description));

@@ -117,24 +117,24 @@ pub fn save(path: &Path, registry: &Registry) -> Result<(), String> {
     fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 
-/// The two seeded demo servers. `exe_dir` is where cargo puts sibling binaries.
-pub fn default_specs(exe_dir: &Path, demo_root: &Path) -> Vec<ServerSpec> {
+/// The two seeded servers. `exe_dir` is where cargo puts sibling binaries.
+pub fn default_specs(exe_dir: &Path, file_root: &Path) -> Vec<ServerSpec> {
     vec![
         ServerSpec {
-            name: "demo-ping".into(),
+            name: "fs".into(),
             autorestart: false,
             transport: Transport::Stdio {
-                command: exe_dir.join("demo-ping").display().to_string(),
-                args: vec![],
+                command: exe_dir.join("fs").display().to_string(),
+                args: vec![file_root.display().to_string()],
                 env: BTreeMap::new(),
             },
         },
         ServerSpec {
-            name: "demo-fs".into(),
+            name: "bash".into(),
             autorestart: false,
             transport: Transport::Stdio {
-                command: exe_dir.join("demo-fs").display().to_string(),
-                args: vec![demo_root.display().to_string()],
+                command: exe_dir.join("bash").display().to_string(),
+                args: vec![],
                 env: BTreeMap::new(),
             },
         },

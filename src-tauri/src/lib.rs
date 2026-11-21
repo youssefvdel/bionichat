@@ -16,6 +16,7 @@ use std::{
 };
 
 use serde::Serialize;
+use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::{
@@ -50,6 +51,8 @@ struct ToolRow {
     name: String,
     description: Option<String>,
     read_only: bool,
+    #[allow(dead_code)]
+    input_schema: Value,
     policy: Decision,
 }
 
@@ -59,6 +62,7 @@ impl ToolRow {
             name: info.name,
             description: info.description,
             read_only: info.read_only,
+            input_schema: info.input_schema,
             policy: decision,
         }
     }
@@ -456,8 +460,8 @@ pub fn run() {
             )?;
 
             let data_dir = app.path().app_data_dir()?;
-            let demo_root = data_dir.join("demo-root");
-            fs::create_dir_all(&demo_root)?;
+            let file_root = data_dir.join("fs-root");
+            fs::create_dir_all(&file_root)?;
             let registry_path = data_dir.join("registry.json");
 
             let exe_dir = std::env::current_exe()
@@ -467,7 +471,7 @@ pub fn run() {
 
             let registry = registry::load(&registry_path).unwrap_or_else(|| {
                 let registry = Registry {
-                    servers: registry::default_specs(&exe_dir, &demo_root),
+                    servers: registry::default_specs(&exe_dir, &file_root),
                     ..Default::default()
                 };
                 if let Err(error) = registry::save(&registry_path, &registry) {

@@ -10,6 +10,7 @@ use rmcp::{
     transport::{ConfigureCommandExt, TokioChildProcess, which_command},
 };
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::registry::{ServerSpec, Transport};
 
@@ -22,6 +23,7 @@ pub struct ToolInfo {
     pub name: String,
     pub description: Option<String>,
     pub read_only: bool,
+    pub input_schema: Value,
 }
 
 pub fn tool_info(tool: &rmcp::model::Tool) -> ToolInfo {
@@ -33,6 +35,7 @@ pub fn tool_info(tool: &rmcp::model::Tool) -> ToolInfo {
             .as_ref()
             .and_then(|a| a.read_only_hint)
             .unwrap_or(false),
+        input_schema: Value::Object(tool.input_schema.as_ref().clone()),
     }
 }
 

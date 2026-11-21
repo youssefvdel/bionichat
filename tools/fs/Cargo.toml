@@ -1,12 +1,8 @@
 [package]
-name = "demo-fs"
+name = "fs"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
-
-[[bin]]
-name = "demo-fs"
-path = "src/main.rs"
 
 [dependencies]
 rmcp = { workspace = true }

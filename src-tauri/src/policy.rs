@@ -38,11 +38,11 @@ mod tests {
     fn read_only_defaults_to_allow() {
         let policies = BTreeMap::new();
         assert_eq!(
-            decision(&policies, "demo-ping", "ping", true),
+            decision(&policies, "fs", "read", true),
             Decision::Allow
         );
         assert_eq!(
-            decision(&policies, "demo-fs", "fs.read", true),
+            decision(&policies, "fs", "list", true),
             Decision::Allow
         );
     }
@@ -51,7 +51,7 @@ mod tests {
     fn mutating_tools_default_to_ask() {
         let policies = BTreeMap::new();
         assert_eq!(
-            decision(&policies, "demo-exec", "shell.run", false),
+            decision(&policies, "bash", "bash", false),
             Decision::Ask
         );
     }
@@ -59,9 +59,9 @@ mod tests {
     #[test]
     fn explicit_deny_beats_a_read_only_hint() {
         let mut policies = BTreeMap::new();
-        policies.insert(key("demo-fs", "fs.read"), Decision::Deny);
+        policies.insert(key("fs", "list"), Decision::Deny);
         assert_eq!(
-            decision(&policies, "demo-fs", "fs.read", true),
+            decision(&policies, "fs", "list", true),
             Decision::Deny
         );
     }
@@ -69,9 +69,9 @@ mod tests {
     #[test]
     fn explicit_allow_beats_the_ask_default() {
         let mut policies = BTreeMap::new();
-        policies.insert(key("demo-exec", "shell.run"), Decision::Allow);
+        policies.insert(key("bash", "bash"), Decision::Allow);
         assert_eq!(
-            decision(&policies, "demo-exec", "shell.run", false),
+            decision(&policies, "bash", "bash", false),
             Decision::Allow
         );
     }
@@ -79,13 +79,13 @@ mod tests {
     #[test]
     fn overrides_are_per_tool_not_per_server() {
         let mut policies = BTreeMap::new();
-        policies.insert(key("demo-ping", "echo"), Decision::Deny);
+        policies.insert(key("fs", "write"), Decision::Deny);
         assert_eq!(
-            decision(&policies, "demo-ping", "echo", true),
+            decision(&policies, "fs", "write", true),
             Decision::Deny
         );
         assert_eq!(
-            decision(&policies, "demo-ping", "ping", true),
+            decision(&policies, "fs", "read", true),
             Decision::Allow
         );
     }

@@ -1,9 +1,12 @@
 # bionichat
 
 MCP dashboard shell. Tauri v3 (alpha) + Rust backend, CEF-capable renderer.
-Passes 1-3 of `PLAN.md`: the dashboard, a real registry, real spawned MCP
-servers, a local hub that aggregates them behind one MCP endpoint, the
-OpenTunnel button, per-tool approval policy, and supervision. No chats yet.
+Passes 1-4 of `PLAN.md`: the dashboard, a real registry, real file and shell
+MCP servers (`fs` with read/write/edit/list, `bash` with one shell tool), a
+local hub that aggregates them behind one MCP endpoint and forwards real
+input schemas, the OpenTunnel button, per-tool approval policy, and
+supervision. `read` and `list` are allowed by default; `write`, `edit` and
+`bash` ask for dashboard approval on every call. No chats yet.
 
 ## Run
 
