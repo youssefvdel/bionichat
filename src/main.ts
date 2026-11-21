@@ -29,6 +29,16 @@ interface Pending {
   arguments: Record<string, unknown> | null;
 }
 
+interface ActivityEntry {
+  time: string;
+  server: string;
+  tool: string;
+  arguments: Record<string, unknown> | null;
+  status: "ok" | "denied" | "timeout" | "error";
+  result: string | null;
+  duration_ms: number;
+}
+
 interface TunnelInfo {
   status: "off" | "starting" | "ready" | "error";
   public_url: string | null;
@@ -99,6 +109,9 @@ const refs = {
   approvalsCard: qs<HTMLElement>("#approvals-card"),
   approvalsList: qs<HTMLUListElement>("#approvals-list"),
   approvalsCount: qs<HTMLSpanElement>("#approvals-count"),
+  activityCard: qs<HTMLElement>("#activity-card"),
+  activityList: qs<HTMLUListElement>("#activity-list"),
+  activityCount: qs<HTMLSpanElement>("#activity-count"),
   addJson: qs<HTMLTextAreaElement>("#add-json"),
   addSubmit: qs<HTMLButtonElement>("#add-submit"),
   addFile: qs<HTMLInputElement>("#add-file"),
@@ -245,6 +258,38 @@ function renderApprovals(list: Pending[]): void {
   refs.approvalsCard.hidden = list.length === 0;
   refs.approvalsCount.textContent = String(list.length);
   refs.approvalsList.replaceChildren(...list.map(pendingNode));
+}
+
+function activityPill(status: ActivityEntry["status"]): string {
+  return status === "ok" ? "pill pill-ready" : status === "denied" ? "pill pill-error" : "pill pill-idle";
+}
+
+function activityNode(entry: ActivityEntry): HTMLLIElement {
+  const item = el("li", "activity");
+  const head = el("div", "server-head");
+  const who = el("span", "server-name", `${entry.server} / ${entry.tool}`);
+  const pill = el("span", activityPill(entry.status), entry.status);
+  const meta = el("span", "muted small", `${entry.time} · ${entry.duration_ms}ms`);
+  head.append(who, pill, meta);
+  item.append(head);
+  if (entry.result) {
+    const preview = entry.result.length > 220 ? `${entry.result.slice(0, 219)}…` : entry.result;
+    item.append(el("code", "url", preview));
+  }
+  return item;
+}
+
+let activityFeed: ActivityEntry[] = [];
+
+function renderActivity(list: ActivityEntry[]): void {
+  activityFeed = list.slice(0, 50);
+  refs.activityCard.hidden = activityFeed.length === 0;
+  refs.activityCount.textContent = String(activityFeed.length);
+  refs.activityList.replaceChildren(...activityFeed.map(activityNode));
+}
+
+function pushActivity(entry: ActivityEntry): void {
+  renderActivity([entry, ...activityFeed]);
 }
 
 function render(rows: ServerRow[]): void {
@@ -518,6 +563,8 @@ if (bridge) {
     renderTunnel(event.payload),
   );
   void bridge.event.listen<Pending>("approval-requested", () => void refreshApprovals());
+  void bridge.event.listen<ActivityEntry>("tool-activity", (event) => pushActivity(event.payload));
+  void bridge.core.invoke<ActivityEntry[]>("activity").then(renderActivity).catch(() => {});
   // Prompts also expire (60s) without any event reaching us.
   window.setInterval(() => void refreshApprovals(), 5000);
 }

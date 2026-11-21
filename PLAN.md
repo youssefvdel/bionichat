@@ -52,6 +52,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
   (`~/.local/bin`), live proof 2026-11-20: public ZeroSSL-verified URL served
   tools/list + tools/call, Stop took the service down. Tunnel state is now
   hydrated from `opentunnel status` at launch.
+- P8 DONE 2026-11-21: live activity feed on the main page — every tools/call recorded (server/tool/time/status/result preview/duration), newest first, pushed over tool-activity events. 36 tests green, live proof: public read appeared in the feed.
 - P7 DONE 2026-11-21: lockdown. Approvals are the real gate again (Ask defaults restored): Approve once, Until restart (in-memory grant, dies with the app, Deny still wins), Deny. Revoke link burns the route + stops the tunnel; next start mints a fresh URL. Live proof over public tunnel + screenshot.
 - P6 DONE 2026-11-21: handshake briefing — hub initialize() tells every agent what bionichat is, whose PC this is, standing full permission, and a tool guide. 32 tests green, live proof over public tunnel.
 - P5 DONE 2026-11-21: every hub result carries a server-time stamp (Cairo local + UTC) so web agents are time-aware. 31 tests green, live proof over public tunnel.

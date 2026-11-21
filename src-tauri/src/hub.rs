@@ -47,6 +47,18 @@ struct Pending {
     reply: tokio::sync::oneshot::Sender<bool>,
 }
 
+/// One finished (or refused) tool call, for the live activity feed.
+#[derive(Debug, Clone, Serialize)]
+pub struct ActivityEntry {
+    pub time: String,
+    pub server: String,
+    pub tool: String,
+    pub arguments: Option<Map<String, Value>>,
+    pub status: String,
+    pub result: Option<String>,
+    pub duration_ms: u64,
+}
+
 /// What the dashboard shows for an open approval prompt.
 #[derive(Debug, Clone, Serialize)]
 pub struct PendingView {
@@ -54,6 +66,14 @@ pub struct PendingView {
     pub server: String,
     pub tool: String,
     pub arguments: Option<Map<String, Value>>,
+}
+
+/// Shorten long text for the activity feed.
+fn preview_of(text: &str, limit: usize) -> String {
+    if text.len() <= limit {
+        return text.to_string();
+    }
+    format!("{}…", text.chars().take(limit).collect::<String>())
 }
 
 pub struct Hub {
@@ -74,6 +94,7 @@ pub struct Hub {
     /// process: nothing persistent, so a restart re-arms every Ask.
     session_allows: Mutex<HashSet<(String, String)>>,
     pending: Mutex<HashMap<u64, Pending>>,
+    activity: Mutex<std::collections::VecDeque<ActivityEntry>>,
     next_id: AtomicU64,
     app: Option<AppHandle>,
     ask_timeout: Duration,
@@ -92,6 +113,7 @@ impl Hub {
             aliases: Mutex::new(HashMap::new()),
             session_allows: Mutex::new(HashSet::new()),
             pending: Mutex::new(HashMap::new()),
+            activity: Mutex::new(std::collections::VecDeque::with_capacity(51)),
             next_id: AtomicU64::new(1),
             app,
             ask_timeout: ASK_TIMEOUT,
@@ -109,6 +131,7 @@ impl Hub {
             aliases: Mutex::new(HashMap::new()),
             session_allows: Mutex::new(HashSet::new()),
             pending: Mutex::new(HashMap::new()),
+            activity: Mutex::new(std::collections::VecDeque::with_capacity(51)),
             next_id: AtomicU64::new(1),
             app: None,
             ask_timeout: timeout,
@@ -444,34 +467,47 @@ impl Hub {
                 })?,
         };
 
+        let started = std::time::Instant::now();
         let registry = self.registry();
-        let spec = registry
-            .server(&server)
-            .cloned()
-            .ok_or((-32602, format!("no registered server `{server}`")))?;
+        let spec = registry.server(&server).cloned().ok_or_else(|| {
+            self.note(&server, &tool, &arguments, started, "error", Some("no registered server".into()));
+            (-32602, format!("no registered server `{server}`"))
+        })?;
 
         // Policy first: a denied call must not start a server or touch the disk.
         let read_only = self.read_only_cached(&server, &tool);
         match policy::decision(&registry.policies, &server, &tool, read_only) {
             // Deny always wins, even over a session grant below.
-            Decision::Deny => return Err((-32001, "denied by policy".to_string())),
+            Decision::Deny => {
+                self.note(&server, &tool, &arguments, started, "denied", None);
+                return Err((-32001, "denied by policy".to_string()));
+            }
             // A session grant skips the prompt for this run only.
             Decision::Ask if !self.session_allowed(&server, &tool) => {
-                if !self.ask(&server, &tool, &arguments).await? {
-                    return Err((-32001, "denied in the dashboard".to_string()));
+                match self.ask(&server, &tool, &arguments).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        self.note(&server, &tool, &arguments, started, "denied", None);
+                        return Err((-32001, "denied in the dashboard".to_string()));
+                    }
+                    Err(failure) => {
+                        self.note(&server, &tool, &arguments, started, "timeout", None);
+                        return Err(failure);
+                    }
                 }
             }
             Decision::Ask | Decision::Allow => {}
         }
 
-        let client = self
-            .session_for(&spec)
-            .await
-            .map_err(|error| (-32603, error))?;
-        let mut result = mcp::call_tool(&client, &tool, arguments)
+        let client = self.session_for(&spec).await.map_err(|error| {
+            self.note(&server, &tool, &arguments, started, "error", Some(preview_of(&error, 220)));
+            (-32603, error)
+        })?;
+        let mut result = mcp::call_tool(&client, &tool, arguments.clone())
             .await
             .map_err(|error| {
                 self.forget(&spec.name);
+                self.note(&server, &tool, &arguments, started, "error", Some(preview_of(&error, 220)));
                 (-32603, error)
             })?;
         // Time-awareness: every result carries the server clock, so a
@@ -481,7 +517,56 @@ impl Hub {
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z"),
             chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
         )));
-        serde_json::to_value(result).map_err(|e| (-32603, e.to_string()))
+        let value = serde_json::to_value(result).map_err(|e| (-32603, e.to_string()))?;
+        let preview = value
+            .pointer("/content/0/text")
+            .and_then(Value::as_str)
+            .map(|text| preview_of(text, 220));
+        self.note(&server, &tool, &arguments, started, "ok", preview);
+        Ok(value)
+    }
+
+    /// Record one finished call for the live activity feed (newest first,
+    /// capped at 50) and push it to the dashboard if one is attached.
+    fn note(
+        &self,
+        server: &str,
+        tool: &str,
+        arguments: &Option<Map<String, Value>>,
+        started: std::time::Instant,
+        status: &str,
+        result: Option<String>,
+    ) {
+        let entry = ActivityEntry {
+            time: chrono::Local::now().format("%H:%M:%S").to_string(),
+            server: server.to_string(),
+            tool: tool.to_string(),
+            arguments: arguments.clone(),
+            status: status.to_string(),
+            result,
+            duration_ms: started.elapsed().as_millis() as u64,
+        };
+        self.activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push_front(entry.clone());
+        self.activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .truncate(50);
+        if let Some(app) = &self.app {
+            let _ = app.emit("tool-activity", entry);
+        }
+    }
+
+    /// Recent activity, newest first, for the dashboard's first paint.
+    pub fn activity(&self) -> Vec<ActivityEntry> {
+        self.activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// The system prompt every client receives at handshake: what bionichat is,
@@ -1077,6 +1162,48 @@ mod tests {
                 .is_some_and(|report| report.contains(home.as_str())),
             "bash must run in $HOME without a workdir: {body}"
         );
+    }
+
+    #[tokio::test]
+    async fn activity_feed_records_calls() {
+        let hub = test_hub("activity");
+        let (_, list) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(list.expect("warm list").get("error").is_none());
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":1,"method":"tools/call",
+                "params":{"name":"read","arguments":{"path":"seed.txt"}}
+            }))
+            .await;
+        assert!(body.expect("call body").get("error").is_none());
+        let feed = hub.activity();
+        assert_eq!(feed.len(), 1, "one call recorded: {feed:?}");
+        let entry = &feed[0];
+        assert_eq!(entry.server, "fs");
+        assert_eq!(entry.tool, "read");
+        assert_eq!(entry.status, "ok");
+        assert!(!entry.time.is_empty(), "stamped with wall time");
+
+        // A denied call lands in the feed too.
+        let mut registry = hub.registry();
+        registry.set_policy("bash", "bash", Decision::Deny);
+        registry::save(&hub.registry_path, &registry).unwrap();
+        let (_, denied) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"bash","arguments":{"command":"nope"}}
+            }))
+            .await;
+        assert_eq!(
+            denied.expect("deny body").pointer("/error/code"),
+            Some(&serde_json::json!(-32001))
+        );
+        let feed = hub.activity();
+        assert_eq!(feed.len(), 2, "denial recorded too: {feed:?}");
+        assert_eq!(feed[0].status, "denied");
+        assert_eq!(feed[0].tool, "bash");
     }
 
     #[tokio::test]

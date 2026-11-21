@@ -264,6 +264,11 @@ fn approvals(state: State<'_, AppState>) -> Vec<PendingView> {
 }
 
 #[tauri::command]
+fn activity(state: State<'_, AppState>) -> Vec<crate::hub::ActivityEntry> {
+    state.hub.activity()
+}
+
+#[tauri::command]
 fn resolve_approval(id: u64, approve: bool, state: State<'_, AppState>) -> bool {
     state.hub.resolve(id, approve)
 }
@@ -533,6 +538,7 @@ pub fn run() {
             set_policy,
             set_autorestart,
             approvals,
+            activity,
             resolve_approval,
             resolve_session,
             restart_server,
