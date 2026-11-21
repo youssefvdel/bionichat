@@ -611,7 +611,6 @@ mod tests {
             names,
             vec![
                 "read",
-                "list",
                 "write",
                 "edit",
                 "bash",
@@ -762,6 +761,11 @@ mod tests {
     #[tokio::test]
     async fn allow_path_calls_a_read_only_tool() {
         let hub = test_hub("allow");
+        std::fs::write(
+            hub.registry_path.parent().expect("test dir").join("seed.txt"),
+            "hi",
+        )
+        .expect("seed file");
         // Real clients always list tools before calling one: that list is what
         // tells the policy the tool is read-only.
         let (_, list) = hub
@@ -771,11 +775,17 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"list","arguments":{"path":"."}}
+                "params":{"name":"read","arguments":{"path":"seed.txt"}}
             }))
             .await;
         let body = body.expect("body");
         assert!(body.get("error").is_none(), "unexpected error: {body}");
+        assert!(
+            body.pointer("/result/content/0/text")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|text| text.contains("1: hi")),
+            "read must return numbered lines: {body}"
+        );
     }
 
     #[tokio::test]

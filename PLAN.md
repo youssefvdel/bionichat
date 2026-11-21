@@ -52,7 +52,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
   (`~/.local/bin`), live proof 2026-11-20: public ZeroSSL-verified URL served
   tools/list + tools/call, Stop took the service down. Tunnel state is now
   hydrated from `opentunnel status` at launch.
-- P4 DONE 2026-11-21: real tools. Servers renamed `fs` (read/write/edit/list) + `bash` (shell); ping/echo deleted. Hub forwards real inputSchema so Gemini knows each tool's params. Live proof over public tunnel: write→approve→read numbered, edit→approve, bash→approve→stdout. `read`/`list` default Allow, rest Ask.
+- P4 DONE 2026-11-21: real tools. Servers renamed `fs` (read/write/edit) + `bash` (shell); ping/echo deleted, then `list` dropped (bash covers it). Hub forwards real inputSchema so Gemini knows each tool's params. Live proof over public tunnel: write→approve→read numbered, edit→approve, bash→approve→stdout. `read` defaults Allow, rest Ask.
 - P3 DONE 2026-11-21: approvals (Allow/Ask/Deny per tool, dashboard banner,
   Approve/Deny buttons, 60s timeout → -32002, deny → -32001 before any spawn),
   supervision (2s probe, auto-restart with 1/2/4s backoff, crash quarantined

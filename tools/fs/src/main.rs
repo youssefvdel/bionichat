@@ -75,7 +75,7 @@ impl ServerHandler for FsServer {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("fs", env!("CARGO_PKG_VERSION")))
-            .with_instructions("File tools: read, write, edit, list.")
+            .with_instructions("File tools: read, write, edit.")
     }
 
     async fn list_tools(
@@ -94,17 +94,6 @@ impl ServerHandler for FsServer {
                         "limit": { "type": "integer", "description": "Max lines to return (default 2000)" }
                     }),
                     &["path"],
-                ),
-            )
-            .with_annotations(ToolAnnotations::new().read_only(true)),
-            Tool::new(
-                "list",
-                "Lists names inside a directory (default: the base directory).",
-                schema(
-                    json!({
-                        "path": { "type": "string", "description": "Directory to list" }
-                    }),
-                    &[],
                 ),
             )
             .with_annotations(ToolAnnotations::new().read_only(true)),
@@ -143,7 +132,6 @@ impl ServerHandler for FsServer {
         let arguments = request.arguments.unwrap_or_default();
         let result = match request.name.as_ref() {
             "read" => self.read(&arguments),
-            "list" => self.list(&arguments),
             "write" => self.write(&arguments),
             "edit" => self.edit(&arguments),
             other => {
@@ -205,37 +193,6 @@ impl FsServer {
                     "`{requested}` is not UTF-8 text"
                 ))]),
             },
-            Err(error) => CallToolResult::error(vec![ContentBlock::text(format!("{error}"))]),
-        }
-    }
-
-    fn list(&self, arguments: &Map<String, Value>) -> CallToolResult {
-        let requested = arguments
-            .get("path")
-            .and_then(Value::as_str)
-            .unwrap_or(".");
-        let path = match self.resolve(requested) {
-            Ok(path) => path,
-            Err(message) => return CallToolResult::error(vec![ContentBlock::text(message)]),
-        };
-        match std::fs::read_dir(&path) {
-            Ok(entries) => {
-                let mut names: Vec<String> = entries
-                    .filter_map(|entry| {
-                        entry.ok().and_then(|e| {
-                            e.file_name().into_string().ok().map(|n| {
-                                if e.path().is_dir() {
-                                    format!("{n}/")
-                                } else {
-                                    n
-                                }
-                            })
-                        })
-                    })
-                    .collect();
-                names.sort();
-                CallToolResult::success(vec![ContentBlock::text(names.join("\n"))])
-            }
             Err(error) => CallToolResult::error(vec![ContentBlock::text(format!("{error}"))]),
         }
     }
