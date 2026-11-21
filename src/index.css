@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ground: #171719;
+  --color-surface: #131217;
+  --color-raised: #212023;
+  --color-edge: #222224;
+  --color-rule: #1b1a1f;
+  --color-control: #3a3a3e;
+  --color-ink: #ffffff;
+  --color-dim: #8a8c92;
+  --color-accent: #4a8ad6;
+  --color-accentink: #0b0e14;
+  --color-good: #44a282;
+  --color-bad: #e5566f;
+  --color-warn: #d9a441;
+  --font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font: 13px/1.55 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accentink);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-control);
+  border-radius: 5px;
+  border: 2px solid var(--color-ground);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Custom titlebar drag region (Tauri reads this attribute). */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+}
+[data-tauri-drag-region] button {
+  -webkit-app-region: no-drag;
+}
+
+details.tools > summary {
+  list-style: none;
+}
+details.tools > summary::-webkit-details-marker {
+  display: none;
+}
+details.tools > summary::before {
+  content: "▸";
+  margin-right: 8px;
+}
+details.tools[open] > summary::before {
+  content: "▾";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -268,6 +268,37 @@ fn activity(state: State<'_, AppState>) -> Vec<crate::hub::ActivityEntry> {
     state.hub.activity()
 }
 
+/// Window controls for the custom title bar (the embedded runtime does not
+/// expose the window module to the frontend, so these run server-side).
+#[tauri::command]
+fn window_minimize(app: AppHandle) -> Result<(), String> {
+    app.get_webview_window("main")
+        .ok_or_else(|| "no main window".to_string())?
+        .minimize()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn window_toggle_maximize(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "no main window".to_string())?;
+    let maximized = window.is_maximized().map_err(|e| e.to_string())?;
+    if maximized {
+        window.unmaximize().map_err(|e| e.to_string())
+    } else {
+        window.maximize().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+fn window_close(app: AppHandle) -> Result<(), String> {
+    app.get_webview_window("main")
+        .ok_or_else(|| "no main window".to_string())?
+        .close()
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn resolve_approval(id: u64, approve: bool, state: State<'_, AppState>) -> bool {
     state.hub.resolve(id, approve)
@@ -553,7 +584,10 @@ pub fn run() {
             restart_server,
             tunnel_start,
             tunnel_stop,
-            tunnel_revoke
+            tunnel_revoke,
+            window_minimize,
+            window_toggle_maximize,
+            window_close
         ])
         .run(tauri::generate_context!())
         .expect("error while running bionichat");

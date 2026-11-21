@@ -14,6 +14,7 @@
       {
         "label": "main",
         "title": "bionichat",
+        "decorations": false,
         "width": 1024,
         "height": 720,
         "minWidth": 720,
