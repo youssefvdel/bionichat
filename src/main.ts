@@ -145,7 +145,7 @@ function requiredList(tool: ToolInfo): string {
   const schema = tool.input_schema as { required?: unknown } | null;
   const required = Array.isArray(schema?.required) ? (schema.required as unknown[]) : [];
   const names = required.filter((name): name is string => typeof name === "string");
-  return names.length > 0 ? ` — needs ${names.join(", ")}` : "";
+  return names.length > 0 ? `, needs ${names.join(", ")}` : "";
 }
 
 function policySelect(row: ServerRow, tool: ToolInfo): HTMLSelectElement {
@@ -317,7 +317,7 @@ function showAddError(message: string): void {
 
 async function load(): Promise<void> {
   if (!bridge) {
-    refs.serversEmpty.textContent = "Tauri bridge not found — open the app, not the file.";
+    refs.serversEmpty.textContent = "Tauri bridge not found. Open the app, not the file.";
     return;
   }
   try {
