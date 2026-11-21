@@ -118,7 +118,7 @@ pub fn save(path: &Path, registry: &Registry) -> Result<(), String> {
 }
 
 /// The two seeded servers. `exe_dir` is where cargo puts sibling binaries.
-pub fn default_specs(exe_dir: &Path, file_root: &Path) -> Vec<ServerSpec> {
+pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec<ServerSpec> {
     vec![
         ServerSpec {
             name: "fs".into(),
@@ -135,6 +135,15 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path) -> Vec<ServerSpec> {
             transport: Transport::Stdio {
                 command: exe_dir.join("bash").display().to_string(),
                 args: vec![],
+                env: BTreeMap::new(),
+            },
+        },
+        ServerSpec {
+            name: "skill".into(),
+            autorestart: false,
+            transport: Transport::Stdio {
+                command: exe_dir.join("skill").display().to_string(),
+                args: vec![skills_dir.display().to_string()],
                 env: BTreeMap::new(),
             },
         },

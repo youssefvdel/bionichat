@@ -1,0 +1,9 @@
+[package]
+name = "skill"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rmcp = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

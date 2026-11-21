@@ -713,12 +713,12 @@ mod tests {
     }
 
     fn ensure_demo_binaries(dir: &Path) {
-        for name in ["fs", "bash"] {
+        for name in ["fs", "bash", "skill"] {
             if dir.join(name).exists() {
                 continue;
             }
             let status = std::process::Command::new("cargo")
-                .args(["build", "-p", "fs", "-p", "bash", "--quiet"])
+                .args(["build", "-p", "fs", "-p", "bash", "-p", "skill", "--quiet"])
                 .current_dir(env!("CARGO_MANIFEST_DIR"))
                 .status()
                 .expect("cargo build for demo servers");
@@ -733,8 +733,12 @@ mod tests {
         let root = std::env::temp_dir().join("bionichat-tests");
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join(format!("registry-{label}.json"));
+        let agents = root.join(format!(".agents-{label}"));
+        let skill_dir = agents.join("skills").join("demo");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(skill_dir.join("SKILL.md"), "# demo\n\nDemo skill.\n").unwrap();
         let registry = Registry {
-            servers: registry::default_specs(&dir, &root),
+            servers: registry::default_specs(&dir, &root, &agents),
             ..Default::default()
         };
         registry::save(&path, &registry).expect("write test registry");
@@ -765,6 +769,7 @@ mod tests {
                 "write",
                 "edit",
                 "bash",
+                "skill",
             ]
         );
         // The hub forwards the real schemas, so web clients know the params.
@@ -966,6 +971,7 @@ mod tests {
         // itself must not start anything new, so it forgets nothing either.
         hub.forget("bash");
         hub.forget("fs");
+        hub.forget("skill");
         assert_eq!(hub.session_count(), 0, "denied call must not spawn a server");
     }
 
@@ -1162,6 +1168,42 @@ mod tests {
                 .is_some_and(|report| report.contains(home.as_str())),
             "bash must run in $HOME without a workdir: {body}"
         );
+    }
+
+    #[tokio::test]
+    async fn skill_list_and_read() {
+        let hub = test_hub("skill");
+        let (_, list) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(list.expect("warm list").get("error").is_none());
+        let (_, listed) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":1,"method":"tools/call",
+                "params":{"name":"skill","arguments":{"action":"list"}}
+            }))
+            .await;
+        let text = listed.expect("list body").pointer("/result/content/0/text")
+            .and_then(Value::as_str).unwrap_or("").to_string();
+        assert!(text.contains("bionichat"), "builtin always listed: {text}");
+        assert!(text.contains("demo"), "folder skill listed: {text}");
+        let (_, read) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"skill","arguments":{"action":"read","name":"bionichat"}}
+            }))
+            .await;
+        let playbook = read.expect("read body").pointer("/result/content/0/text")
+            .and_then(Value::as_str).unwrap_or("").to_string();
+        assert!(playbook.contains("bionichat"), "builtin playbook loads: {playbook}");
+        let (_, missing) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":3,"method":"tools/call",
+                "params":{"name":"skill","arguments":{"action":"read","name":"nope"}}
+            }))
+            .await;
+        assert!(missing.expect("missing body").pointer("/result/content/0/text")
+            .and_then(Value::as_str).unwrap_or("").contains("no skill named"));
     }
 
     #[tokio::test]

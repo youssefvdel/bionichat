@@ -479,6 +479,8 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             let file_root = data_dir.join("fs-root");
             fs::create_dir_all(&file_root)?;
+            let skills_dir = data_dir.join(".agents");
+            fs::create_dir_all(&skills_dir)?;
             let registry_path = data_dir.join("registry.json");
 
             let exe_dir = std::env::current_exe()
@@ -486,16 +488,23 @@ pub fn run() {
                 .and_then(|exe| exe.parent().map(Path::to_path_buf))
                 .ok_or("cannot locate the binary directory")?;
 
-            let registry = registry::load(&registry_path).unwrap_or_else(|| {
-                let registry = Registry {
-                    servers: registry::default_specs(&exe_dir, &file_root),
-                    ..Default::default()
-                };
+            let mut registry = registry::load(&registry_path).unwrap_or_else(|| Registry {
+                servers: Vec::new(),
+                ..Default::default()
+            });
+            // New built-in tools join an existing registry; user servers win.
+            let mut added = false;
+            for spec in registry::default_specs(&exe_dir, &file_root, &skills_dir) {
+                if !registry.servers.iter().any(|s| s.name == spec.name) {
+                    registry.servers.push(spec);
+                    added = true;
+                }
+            }
+            if registry.servers.is_empty() || added {
                 if let Err(error) = registry::save(&registry_path, &registry) {
                     log::warn!("could not seed the registry: {error}");
                 }
-                registry
-            });
+            }
 
             let port = std::env::var("BIONICHAT_HUB_PORT")
                 .ok()

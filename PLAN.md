@@ -22,6 +22,11 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P1: Tauri v3 shell + dashboard (servers list, add-via-Anthropic-JSON, tools list). Two demo servers (ping, scoped fs.read).
 - P2: hub /mcp aggregator on localhost + OpenTunnel button + status.
 - P3: approvals + persistence (registry file, restart supervision). Chats explicitly NOT in v1.
+- P4: real tools (read/write/edit/bash) replacing demos, bare names, server-time stamps, handshake briefing.
+- P5: Tauri approval gate (ask/session-allow/deny), link revoke with fresh URL on next start.
+- P6: live activity feed on the main page.
+- P7: data-terminal dark restyle; hub-spur logo concepts (A1 refined + power-b finalists).
+- P8: skill manager — `skill` tool lists/loads playbooks from the `.agents` folder (`skills/<name>/SKILL.md`) plus a built-in `bionichat` skill. Read-only.
 
 ## SRS (testable)
 1. App boots to dashboard in ~1s cold (normal disk).
