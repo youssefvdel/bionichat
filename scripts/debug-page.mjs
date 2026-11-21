@@ -59,9 +59,16 @@ const fixtures = {
     approvals_default: "read-only allow · everything else ask",
     renderer: "cef",
     registry_path: "/home/youssefvdel/.local/share/com.bionichat.app/registry.json",
+    version: "0.1.0",
   },
   approvals: [],
   activity: [],
+  projects: [
+    { name: "web-agent", path: "/home/youssefvdel/Projects/web-agent", entries: 14 },
+    { name: "Arkrete", path: "/home/youssefvdel/Projects/Arkrete", entries: 32 },
+    { name: "9router", path: "/home/youssefvdel/Projects/9router", entries: 9 },
+    { name: "ADHD-Task-manager", path: "/home/youssefvdel/Projects/ADHD-Task-manager", entries: 21 },
+  ],
 };
 
 const html = `<!doctype html>

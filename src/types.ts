@@ -36,6 +36,12 @@ export interface ActivityEntry {
   duration_ms: number;
 }
 
+export interface ProjectEntry {
+  name: string;
+  path: string;
+  entries: number;
+}
+
 export interface CallStart {
   server: string;
   tool: string;
@@ -57,6 +63,7 @@ export interface HubRow {
 }
 
 export interface Dashboard {
+  version: string;
   servers: ServerRow[];
   hub: HubRow;
   tunnel: TunnelInfo;

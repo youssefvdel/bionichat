@@ -1,138 +1,98 @@
-import type { ServerRow, ToolInfo } from "../types";
+import { useEffect, useState } from "react";
+import type { ProjectEntry } from "../types";
 import { invoke } from "../tauri";
 import { Button, Panel } from "../components/ui";
-import { Pill } from "../components/chrome";
 
-function requiredList(tool: ToolInfo): string {
-  const schema = tool.input_schema as { required?: unknown } | null;
-  const required = Array.isArray(schema?.required) ? (schema.required as unknown[]) : [];
-  const names = required.filter((n): n is string => typeof n === "string");
-  return names.length > 0 ? `, needs ${names.join(", ")}` : "";
+async function copyPath(path: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-function Project({
-  row,
-  onServers,
-}: {
-  row: ServerRow;
-  onServers: (rows: ServerRow[]) => void;
-}) {
-  async function restart() {
-    onServers(await invoke<ServerRow[]>("restart_server", { server: row.name }));
-  }
+export function Projects() {
+  const [rows, setRows] = useState<ProjectEntry[] | null>(null);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+  const [reload, setReload] = useState(0);
 
-  async function policy(tool: string, decision: string) {
-    onServers(await invoke<ServerRow[]>("set_policy", { server: row.name, tool, decision }));
-  }
-
-  async function autorestart(enabled: boolean) {
-    onServers(await invoke<ServerRow[]>("set_autorestart", { server: row.name, enabled }));
-  }
+  useEffect(() => {
+    let cancelled = false;
+    invoke<ProjectEntry[]>("projects")
+      .then((list) => {
+        if (!cancelled) {
+          setRows(list);
+          setError("");
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reload]);
 
   return (
-    <li className="clay-bump px-4 py-3.5">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="font-mono text-[13px] font-[600]">{row.name}</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-dim">
-          {row.transport}
-        </span>
-        <Pill status={row.status} />
-        <Button small onClick={() => void restart()}>
-          Restart
-        </Button>
-        <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] whitespace-nowrap text-dim">
-          <input
-            type="checkbox"
-            className="accent-accent"
-            checked={row.autorestart}
-            onChange={(e) => void autorestart(e.target.checked)}
-          />
-          auto-restart
-        </label>
-      </div>
-
-      {row.error && (
-        <p className="mt-2 mb-0 font-mono text-[11.5px] break-words text-bad">{row.error}</p>
-      )}
-
-      {row.tools.length > 0 && (
-        <details
-          className="tools mt-2.5"
-          open={row.status === "ready" && row.tools.length <= 3}
-        >
-          <summary className="flex min-h-7 cursor-pointer items-center text-[11.5px] text-dim">
-            {row.tools.length} tool{row.tools.length === 1 ? "" : "s"}
-          </summary>
-          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 pt-1">
-            {row.tools.map((tool) => (
-              <li
-                key={tool.name}
-                title={`${tool.name}${requiredList(tool)}`}
-                className="flex min-h-7 items-baseline gap-2 text-[12px]"
-              >
-                <span className="font-mono text-[12px] text-ink">{tool.name}</span>
-                {tool.read_only && (
-                  <span className="rounded-full bg-ground px-2 py-0.5 font-mono text-[10.5px] text-dim">
-                    read-only
-                  </span>
-                )}
-                {tool.description && (
-                  <span className="min-w-0 flex-1 truncate text-[11.5px] text-dim">
-                    {tool.description}
-                  </span>
-                )}
-                <select
-                  className="clay-select ml-auto"
-                  title={`Policy for ${row.name} / ${tool.name}`}
-                  value={tool.policy}
-                  onChange={(e) => void policy(tool.name, e.target.value)}
-                >
-                  <option value="allow">Allow</option>
-                  <option value="ask">Ask</option>
-                  <option value="deny">Deny</option>
-                </select>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </li>
-  );
-}
-
-export function Projects({
-  rows,
-  onServers,
-  onAdd,
-}: {
-  rows: ServerRow[] | null;
-  onServers: (rows: ServerRow[]) => void;
-  onAdd: () => void;
-}) {
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-[19px] font-[600] tracking-[-0.018em]">Projects</h1>
-        <Button onClick={onAdd}>Add a project</Button>
-      </div>
-      <Panel labelledBy="projects-title">
-      {rows === null ? (
-        <p className="m-0 text-[12.5px] text-dim">Loading…</p>
-      ) : rows.length === 0 ? (
-        <div className="flex flex-col items-start gap-3 py-2">
-          <p className="m-0 max-w-[46ch] text-[12.5px] text-dim">
-            A project is one MCP server and the tools it gives your chat. Add one from Settings.
-          </p>
-          <Button onClick={onAdd}>Add a project</Button>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-dim">~/Projects</span>
+          <Button small onClick={() => setReload((n) => n + 1)}>
+            Refresh
+          </Button>
         </div>
+      </div>
+
+      {error && (
+        <p role="alert" className="m-0 rounded-md bg-[#fdeceb] px-3 py-2 font-mono text-[11.5px] text-bad">
+          {error}
+        </p>
+      )}
+
+      {rows === null ? (
+        <Panel>
+          <p className="m-0 text-[12.5px] text-dim">Reading your projects folder…</p>
+        </Panel>
+      ) : rows.length === 0 ? (
+        <Panel>
+          <p className="m-0 max-w-[46ch] text-[12.5px] text-dim">
+            No folders in ~/Projects yet. Create one there and it shows up here.
+          </p>
+        </Panel>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-2.5 p-0" aria-live="polite">
+        <ul className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 md:grid-cols-2">
           {rows.map((row) => (
-            <Project key={row.name} row={row} onServers={onServers} />
+            <li key={row.path} className="clay-panel flex items-center gap-3 px-4 py-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-ground font-mono text-[12px] text-dim">
+                {row.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate text-[13px] font-[550] text-ink">{row.name}</span>
+                <span className="truncate font-mono text-[10.5px] text-dim">{row.path}</span>
+              </span>
+              <span className="ml-auto shrink-0 text-[11px] text-dim tabular-nums">
+                {row.entries}
+              </span>
+              <Button
+                small
+                title="Copy the folder path"
+                onClick={() => {
+                  void copyPath(row.path).then((ok) => {
+                    setCopied(ok ? row.path : "");
+                    window.setTimeout(() => setCopied(""), 1400);
+                  });
+                }}
+              >
+                {copied === row.path ? "Copied" : "Copy"}
+              </Button>
+            </li>
           ))}
         </ul>
       )}
-      </Panel>
     </div>
   );
 }

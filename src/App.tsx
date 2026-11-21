@@ -11,6 +11,7 @@ import type { FlashState, RunningCall } from "./components/ToolFlow";
 export default function App() {
   const [view, setView] = useState<View>("overview");
   const [renderer, setRenderer] = useState("—");
+  const [version, setVersion] = useState("");
   const [hubSessions, setHubSessions] = useState(0);
   const [tunnel, setTunnel] = useState<TunnelInfo>({ status: "off", public_url: null, error: null });
   const [approvals, setApprovals] = useState<Pending[]>([]);
@@ -26,6 +27,7 @@ export default function App() {
 
   const applyDashboard = useCallback((data: Dashboard) => {
     setRenderer(data.renderer);
+    setVersion(data.version);
     setApprovalsDefault(data.approvals_default);
     setRegistryPath(data.registry_path);
     setHubSessions(data.hub.sessions);
@@ -140,6 +142,7 @@ export default function App() {
           view={view}
           onView={setView}
           waiting={approvals.length}
+          version={version}
         />
         <main className="min-h-0 flex-1 overflow-y-auto pr-5 pb-8">
           {loadError && (
@@ -150,23 +153,13 @@ export default function App() {
           {view === "overview" && (
             <Overview
               tunnel={tunnel}
-              hubSessions={hubSessions}
-              servers={servers}
-              activity={activity}
-              running={running}
-              flash={flash}
               approvals={approvals}
               onApprovals={setApprovals}
               onOpenSettings={() => setView("settings")}
+              onOpenProjects={() => setView("projects")}
             />
           )}
-          {view === "projects" && (
-            <Projects
-              rows={servers}
-              onServers={setServers}
-              onAdd={() => setView("settings")}
-            />
-          )}
+          {view === "projects" && <Projects />}
           {view === "settings" && (
             <Settings
               tunnel={tunnel}
@@ -175,6 +168,10 @@ export default function App() {
               onServers={setServers}
               approvalsDefault={approvalsDefault}
               registryPath={registryPath}
+              activity={activity}
+              running={running}
+              flash={flash}
+              hubSessions={hubSessions}
             />
           )}
         </main>

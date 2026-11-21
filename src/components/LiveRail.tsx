@@ -18,13 +18,19 @@ function Args({ args }: { args: Record<string, unknown> | null }) {
 export function LiveRail({
   running,
   activity,
+  bare,
 }: {
   running: RunningCall[];
   activity: ActivityEntry[];
+  bare?: boolean;
 }) {
   return (
     <aside className="flex min-h-0 flex-col gap-3" aria-label="Live calls">
-      <div className="clay-panel flex min-h-0 flex-1 flex-col px-4 pt-3.5 pb-4">
+      <div
+        className={`flex min-h-0 flex-1 flex-col ${
+          bare ? "max-h-[320px] overflow-hidden" : "clay-panel px-4 pt-3.5 pb-4"
+        }`}
+      >
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="text-[12.5px] font-[550]">Live calls</h2>
           <Pill

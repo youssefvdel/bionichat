@@ -1,8 +1,11 @@
 import { useState } from "react";
-import type { ServerRow, TunnelInfo } from "../types";
+import type { ActivityEntry, ServerRow, TunnelInfo } from "../types";
 import { invoke } from "../tauri";
 import { Button, Panel } from "../components/ui";
 import { Pill } from "../components/chrome";
+import { LiveRail } from "../components/LiveRail";
+import { ToolFlow, type FlashState, type RunningCall } from "../components/ToolFlow";
+import { Servers } from "../components/Servers";
 
 function Tunnel({
   info,
@@ -100,7 +103,7 @@ function Tunnel({
   );
 }
 
-function AddProject({
+function AddServer({
   onServers,
   primary,
 }: {
@@ -132,7 +135,7 @@ function AddProject({
   return (
     <Panel
       labelledBy="add-title"
-      title="Add a project"
+      title="Add a server"
       right={<span className="text-[11.5px] text-dim">Anthropic JSON</span>}
     >
       <p className="m-0 text-[12.5px] text-dim">
@@ -145,7 +148,7 @@ function AddProject({
         value={json}
         onChange={(e) => setJson(e.target.value)}
         spellCheck={false}
-        rows={6}
+        rows={5}
         placeholder={`{
   "mcpServers": {
     "notes": { "command": "bunx", "args": ["-y", "mcp-server-notes"] }
@@ -195,6 +198,10 @@ export function Settings({
   onServers,
   approvalsDefault,
   registryPath,
+  activity,
+  running,
+  flash,
+  hubSessions,
 }: {
   tunnel: TunnelInfo;
   onTunnel: (info: TunnelInfo) => void;
@@ -202,26 +209,58 @@ export function Settings({
   onServers: (rows: ServerRow[]) => void;
   approvalsDefault: string;
   registryPath: string;
+  activity: ActivityEntry[];
+  running: RunningCall[];
+  flash: FlashState;
+  hubSessions: number;
 }) {
+  const live = tunnel.status === "ready";
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <h1 className="text-[19px] font-[600] tracking-[-0.018em]">Settings</h1>
-      <Tunnel info={tunnel} onChange={onTunnel} primary={tunnel.status !== "ready"} />
+
+      <Tunnel info={tunnel} onChange={onTunnel} primary={!live} />
+
+      <Panel
+        labelledBy="servers-title"
+        title="Servers"
+        right={
+          <span className="text-[11.5px] text-dim tabular-nums">
+            {servers?.length ?? 0} · {servers?.reduce((sum, s) => sum + s.tools.length, 0) ?? 0} tools
+          </span>
+        }
+      >
+        <Servers rows={servers} onServers={onServers} />
+      </Panel>
+
+      <Panel
+        labelledBy="tools-title"
+        title="Tools"
+        right={
+          <span className="text-[11.5px] text-dim tabular-nums">
+            {hubSessions} sessions
+          </span>
+        }
+      >
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_290px]">
+          <div className="clay-bump min-h-[320px] overflow-hidden !p-0">
+            <ToolFlow servers={servers} flash={flash} running={running} sessions={hubSessions} />
+          </div>
+          <LiveRail running={running} activity={activity} bare />
+        </div>
+      </Panel>
+
+      <AddServer onServers={onServers} primary={!live} />
 
       <Panel labelledBy="approvals-title" title="Approvals">
         <p className="m-0 text-[12.5px] text-dim">
           Default for every tool that does not set its own policy:{" "}
           <strong className="font-[550] text-ink">{approvalsDefault || "ask"}</strong>. Read-only
           tools run freely; anything that changes your machine asks you first. Set a tool's policy
-          in Projects.
-        </p>
-        <p className="mt-2 mb-0 text-[11.5px] text-dim">
-          {servers?.length ?? 0} projects ·{" "}
-          {servers?.reduce((sum, s) => sum + s.tools.length, 0) ?? 0} tools exposed
+          in Servers above.
         </p>
       </Panel>
-
-      <AddProject onServers={onServers} primary={tunnel.status === "ready"} />
 
       <Panel labelledBy="paths-title" title="Files">
         <dl className="m-0 flex flex-col gap-2 text-[11.5px]">

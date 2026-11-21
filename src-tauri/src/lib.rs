@@ -110,6 +110,7 @@ struct Dashboard {
     approvals_default: &'static str,
     renderer: &'static str,
     registry_path: String,
+    version: &'static str,
 }
 
 struct AppState {
@@ -144,6 +145,7 @@ fn dashboard_of(state: &AppState) -> Dashboard {
         tunnel: state.tunnel.info(),
         approvals: state.hub.pending(),
         approvals_default: "read-only allow · everything else ask",
+        version: env!("CARGO_PKG_VERSION"),
         renderer: RENDERER,
         registry_path: state.registry_path.display().to_string(),
     }
@@ -188,6 +190,48 @@ fn store_rows(state: &AppState, rows: Vec<ServerRow>) {
 
 fn find_row<'a>(rows: &'a mut [ServerRow], name: &str) -> Option<&'a mut ServerRow> {
     rows.iter_mut().find(|row| row.name == name)
+}
+
+/// One folder under the user's Projects directory.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProjectEntry {
+    pub name: String,
+    pub path: String,
+    pub entries: usize,
+}
+
+/// The user's own projects: plain folders, nothing to do with MCP servers.
+#[tauri::command]
+fn projects() -> Vec<ProjectEntry> {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_default();
+    let root = std::path::PathBuf::from(home).join("Projects");
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            let entries = std::fs::read_dir(&path).map(|dir| dir.count()).unwrap_or(0);
+            out.push(ProjectEntry {
+                name,
+                path: path.display().to_string(),
+                entries,
+            });
+        }
+    }
+    out.sort_by_key(|p| p.name.to_lowercase());
+    out
 }
 
 #[tauri::command]
@@ -573,6 +617,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             dashboard,
+            projects,
             refresh,
             add_servers,
             set_policy,

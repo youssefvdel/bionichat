@@ -26,6 +26,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P5: Tauri approval gate (ask/session-allow/deny), link revoke with fresh URL on next start.
 - P6: live activity feed on the main page.
 - P7: data-terminal dark restyle; hub-spur logo concepts (A1 refined + power-b finalists).
+- P14: Projects means the user's ~/Projects folders; servers, tools, live map and tunnel move to Settings (pinned bottom); sidebar dimmed with logo footer.
 - P13: live tool map on Overview (React Flow): hub → projects → tools, `tool-start` event, animated path, live rail of running and recent calls.
 - P12: clay raised (no pressed wells), sidebar with Overview / Projects / Settings, setup moved to Settings, one primary action per screen.
 - P11: calm clay — OpenCode's cool neutral tokens (#fbfbfb / #1d1d1f / #007aff, greys from its shell CSS) on soft clay surfaces: 22px panels, layered shadows, pill clay buttons, one primary that follows state. Pointed at point-here (taste-skill, impeccable, React Bits) for the rules.

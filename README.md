@@ -73,8 +73,14 @@ dist/                     bun run build output
 
 ## The live map
 
-Overview draws the hub, every project and every tool as a graph, and lights
-the path up while a call is in flight.
+Settings → Tools draws the hub, every server and every tool as a graph, and
+lights the path up while a call is in flight.
+
+Overview is the home page: the public link, approvals waiting on you, and a
+way into your projects. Projects lists the folders in `~/Projects` (your own
+work, not MCP servers). Everything about the bridge — servers, tool policies,
+the live map, the tunnel — lives in Settings, pinned to the bottom of the
+sidebar.
 
 - The hub emits `tool-start` the moment a call arrives, before policy runs,
   and `tool-activity` when it finishes. The graph marks the tool blue with a
