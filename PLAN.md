@@ -52,6 +52,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
   (`~/.local/bin`), live proof 2026-11-20: public ZeroSSL-verified URL served
   tools/list + tools/call, Stop took the service down. Tunnel state is now
   hydrated from `opentunnel status` at launch.
+- P6 DONE 2026-11-21: handshake briefing — hub initialize() tells every agent what bionichat is, whose PC this is, standing full permission, and a tool guide. 32 tests green, live proof over public tunnel.
 - P5 DONE 2026-11-21: every hub result carries a server-time stamp (Cairo local + UTC) so web agents are time-aware. 31 tests green, live proof over public tunnel.
 - P4 DONE 2026-11-21: real tools. Servers renamed `fs` (read/write/edit) + `bash` (shell); ping/echo deleted, then `list` dropped (bash covers it). Hub forwards real inputSchema so Gemini knows each tool's params. Live proof over public tunnel: write→approve→read numbered, edit→approve, bash→approve→stdout. `read` defaults Allow, rest Ask.
 - P3 DONE 2026-11-21: approvals (Allow/Ask/Deny per tool, dashboard banner,

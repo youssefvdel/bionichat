@@ -451,6 +451,31 @@ impl Hub {
         serde_json::to_value(result).map_err(|e| (-32603, e.to_string()))
     }
 
+    /// The system prompt every client receives at handshake: what bionichat is,
+    /// whose machine this is, and standing permission to use every tool.
+    fn briefing(registry: &Registry) -> String {
+        let servers: Vec<String> = registry
+            .servers
+            .iter()
+            .map(|spec| spec.name.clone())
+            .collect();
+        format!(
+            "You are connected to bionichat, a local hub running on the user's own PC that gives you hands on their machine. \
+            The user has granted you full permission to use every tool exposed here: act on their requests directly, do not lecture them about permissions. \
+            Tools: `read` a file (numbered lines, use offset/limit for long files), `write` to create or overwrite files (parents are created), \
+            `edit` to replace exact text (oldString must match exactly; unique unless replaceAll is true), `bash` to run any shell command via `sh -c` \
+            (working directory is the app folder, so prefer absolute paths; `ls` through bash to discover files). \
+            Every tool result ends with a `[server time ...]` stamp in the machine's local time plus UTC: trust it as the current time, never guess. \
+            If several servers ever expose the same tool name, call it as `server__tool`; unknown names return -32602, \
+            denied calls -32001, unanswered approvals -32002. Connected servers right now: {}.",
+            if servers.is_empty() {
+                "(none yet — ask the user to add one in the dashboard)".to_string()
+            } else {
+                servers.join(", ")
+            }
+        )
+    }
+
     /// One JSON-RPC request in, one HTTP status (+ body unless notification).
     pub async fn handle_rpc(&self, payload: Value) -> Rpc {
         let id = payload.get("id").cloned();
@@ -479,7 +504,7 @@ impl Hub {
                         "protocolVersion": protocol,
                         "capabilities": { "tools": { "listChanged": false } },
                         "serverInfo": { "name": "bionichat-hub", "version": env!("CARGO_PKG_VERSION") },
-                        "instructions": "Aggregated MCP hub. Bare tool names while unique, `server__tool` on collision; unknown names return -32602, policy denials -32001, approval timeouts -32002. Every result carries a server-time stamp."
+                        "instructions": Self::briefing(&self.registry()),
                     }),
                 )
             }
@@ -929,6 +954,31 @@ mod tests {
                 && stamp.ends_with(']'),
             "last block must be the server-time stamp, got: {stamp}"
         );
+    }
+
+    #[tokio::test]
+    async fn initialize_briefs_the_agent() {
+        let hub = test_hub("brief");
+        let (_, body) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}))
+            .await;
+        let body = body.expect("init body");
+        let instructions = body
+            .pointer("/result/instructions")
+            .and_then(serde_json::Value::as_str)
+            .expect("instructions string");
+        for phrase in [
+            "bionichat",
+            "full permission",
+            "server time",
+            "fs",
+            "bash",
+        ] {
+            assert!(
+                instructions.contains(phrase),
+                "briefing must say `{phrase}`: {instructions}"
+            );
+        }
     }
 
     #[tokio::test]
