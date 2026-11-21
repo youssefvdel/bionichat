@@ -1,5 +1,5 @@
 // Tauri bridge: the app exposes window.__TAURI__ (withGlobalTauri).
-// Same commands and events the vanilla dashboard used — backend untouched.
+// Same commands and events the vanilla dashboard used. Backend untouched.
 
 interface TauriCore {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;

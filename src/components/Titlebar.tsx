@@ -3,7 +3,7 @@ import { Mark } from "./chrome";
 
 function MinIcon() {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <path d="M1.5 5h7" />
     </svg>
   );
@@ -11,15 +11,15 @@ function MinIcon() {
 
 function MaxIcon() {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4">
-      <rect x="1.2" y="1.2" width="7.6" height="7.6" rx="1.6" />
+    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="1.2" y="1.2" width="7.6" height="7.6" rx="1.8" />
     </svg>
   );
 }
 
 function CloseIcon() {
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <path d="M1.6 1.6l6.8 6.8M8.4 1.6l-6.8 6.8" />
     </svg>
   );
@@ -42,8 +42,8 @@ function WinButton({
       title={title}
       aria-label={title}
       onClick={onClick}
-      className={`clay-button clay-button-sm !min-h-8 !w-8 !px-0 text-dim ${
-        danger ? "hover:!bg-[#fdecea] hover:!text-bad" : "hover:!text-ink"
+      className={`clay-button clay-button-sm !min-h-7 !w-7 !px-0 text-dim ${
+        danger ? "hover:!text-bad" : "hover:!text-ink"
       }`}
     >
       {children}
@@ -59,20 +59,18 @@ export function Titlebar({ renderer }: { renderer: string }) {
   return (
     <header
       data-tauri-drag-region
-      className="flex h-[54px] shrink-0 items-center gap-2.5 pr-3 pl-5 select-none"
+      className="flex h-[52px] shrink-0 items-center gap-2.5 px-4 select-none"
     >
       <span className="text-ink">
-        <Mark size={17} />
+        <Mark size={16} />
       </span>
-      <span className="text-[14px] font-[600] tracking-[-0.01em]">bionichat</span>
-      <span className="mt-px hidden text-[12px] text-dim sm:inline">
-        your PC, reachable from the chat
-      </span>
-      <span className="ml-1 hidden rounded-full bg-raised px-2 py-1 font-mono text-[10.5px] text-dim md:inline">
-        {renderer || "—"}
-      </span>
+      <span className="text-[13.5px] font-[600] tracking-[-0.012em]">bionichat</span>
+      <span className="mt-px text-[11.5px] text-dim">your PC, from the chat</span>
 
       <div className="ml-auto flex items-center gap-1.5">
+        <span className="mr-2 hidden rounded-full bg-surface px-2 py-1 font-mono text-[10px] text-dim shadow-[0_1px_2px_rgba(20,22,28,0.06)] md:inline">
+          {renderer || "—"}
+        </span>
         <WinButton title="Minimize" onClick={() => run("window_minimize")}>
           <MinIcon />
         </WinButton>

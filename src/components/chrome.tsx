@@ -1,19 +1,19 @@
-/* Soft chips and status marks, tinted from the page's own palette.
-   Colours stay quiet: a chip is a tinted well, never a bright badge. */
+/* The product mark, its status chips, and the three nav icons.
+   One stroke weight, one drawing style. */
 
 const tone: Record<string, string> = {
-  pending: "bg-[#fdf3e3] text-warn",
-  ready: "bg-[#eaf6ee] text-good",
-  error: "bg-[#fdecea] text-bad",
-  starting: "bg-raised text-sub",
-  off: "bg-raised text-dim",
-  idle: "bg-raised text-dim",
-  ok: "bg-[#eaf6ee] text-good",
-  denied: "bg-[#fdecea] text-bad",
-  timeout: "bg-raised text-dim",
+  pending: "bg-[#fdf4e6] text-warn",
+  ready: "bg-[#e9f6ee] text-good",
+  error: "bg-[#fdeceb] text-bad",
+  starting: "bg-bump text-sub",
+  off: "bg-bump text-dim",
+  idle: "bg-bump text-dim",
+  ok: "bg-[#e9f6ee] text-good",
+  denied: "bg-[#fdeceb] text-bad",
+  timeout: "bg-bump text-dim",
 };
 
-export function Mark({ size = 18 }: { size?: number }) {
+export function Mark({ size = 17 }: { size?: number }) {
   return (
     <svg
       viewBox="0 0 256 256"
@@ -41,5 +41,52 @@ export function Pill({ status, label }: { status: string; label?: string }) {
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
       {label ?? status}
     </span>
+  );
+}
+
+function Icon({ children }: { children: React.ReactNode }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      {children}
+    </svg>
+  );
+}
+
+export function OverviewIcon() {
+  return (
+    <Icon>
+      <circle cx="8" cy="8" r="5.6" />
+      <circle cx="8" cy="8" r="1.6" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
+export function ProjectsIcon() {
+  return (
+    <Icon>
+      <rect x="2.4" y="2.6" width="8" height="8" rx="2" />
+      <path d="M5.6 13.4h6a2 2 0 0 0 2-2v-6" />
+    </Icon>
+  );
+}
+
+export function SettingsIcon() {
+  return (
+    <Icon>
+      <path d="M2.6 5h4M9.4 5h4M2.6 11h6M11.4 11h2" />
+      <circle cx="7.6" cy="5" r="1.9" />
+      <circle cx="9.6" cy="11" r="1.9" />
+    </Icon>
   );
 }
