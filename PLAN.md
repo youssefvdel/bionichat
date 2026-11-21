@@ -47,7 +47,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 ## Status
 - P1 DONE 2026-11-20: shell, registry, dashboard, demo servers, tools/list.
 - P2 DONE 2026-11-20: hub `POST /mcp` on 127.0.0.1:8787 (initialize, notifications,
-  ping, tools/list union as `server__tool`, tools/call routed over live sessions),
+  ping, tools/list union (bare names when unique), tools/call routed over live sessions),
   tunnel button + URL scrape + cert poll. `opentunnel 0.6.2` installed user-local
   (`~/.local/bin`), live proof 2026-11-20: public ZeroSSL-verified URL served
   tools/list + tools/call, Stop took the service down. Tunnel state is now

@@ -2,8 +2,9 @@
 //! every server in the registry into one tool list, routes calls back over each
 //! server's own stdio session, and enforces the approval policy.
 //!
-//! Tool naming: `server__tool` (first `__` splits server from tool, so server
-//! names registered through the dashboard must not contain `__`).
+//! Tool naming: a bare name while exactly one server provides it, otherwise
+//! `server__tool` (first `__` splits server from tool, so server names
+//! registered through the dashboard must not contain `__`).
 
 use std::{
     collections::{HashMap, HashSet},
@@ -64,6 +65,10 @@ pub struct Hub {
     /// Servers that died while auto-restart was off. They stay down until the
     /// user restarts them, so a crash cannot be papered over by a lazy connect.
     quarantine: Mutex<HashSet<String>>,
+    /// Bare tool names the hub advertises. A name maps to its server only
+    /// while exactly one server provides it; on collision the caller must use
+    /// `server__tool`. Rebuilt by every `tools_union`.
+    aliases: Mutex<HashMap<String, (String, String)>>,
     pending: Mutex<HashMap<u64, Pending>>,
     next_id: AtomicU64,
     app: Option<AppHandle>,
@@ -80,6 +85,7 @@ impl Hub {
             sessions: Mutex::new(HashMap::new()),
             catalog: Mutex::new(HashMap::new()),
             quarantine: Mutex::new(HashSet::new()),
+            aliases: Mutex::new(HashMap::new()),
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             app,
@@ -95,6 +101,7 @@ impl Hub {
             sessions: Mutex::new(HashMap::new()),
             catalog: Mutex::new(HashMap::new()),
             quarantine: Mutex::new(HashSet::new()),
+            aliases: Mutex::new(HashMap::new()),
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             app: None,
@@ -130,6 +137,11 @@ impl Hub {
 
     pub fn forget(&self, name: &str) {
         self.sessions().remove(name);
+        // Name ownership may have changed hands: the next list rebuilds it.
+        self.aliases
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|_, owner| owner.0 != name);
         self.catalog
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -231,33 +243,58 @@ impl Hub {
     /// policy attached so the dashboard can render the dropdown.
     pub async fn tools_union(&self) -> Vec<Value> {
         let registry = self.registry();
-        let mut out = Vec::new();
+        let mut listed: Vec<(ServerSpec, ToolInfo)> = Vec::new();
         for spec in &registry.servers {
             match self.tools_for(spec).await {
                 Ok(tools) => {
                     for tool in tools {
-                        let decision = policy::decision(
-                            &registry.policies,
-                            &spec.name,
-                            &tool.name,
-                            tool.read_only,
-                        );
-                        out.push(json!({
-                            "name": format!("{}{SEPARATOR}{}", spec.name, tool.name),
-                            "description": match tool.description {
-                                Some(description) => format!("[{}] {description}", spec.name),
-                                None => format!("[{}]", spec.name),
-                            },
-                            "inputSchema": tool.input_schema,
-                            "annotations": { "readOnlyHint": tool.read_only },
-                            "policy": decision_name(decision),
-                        }));
+                        listed.push((spec.clone(), tool));
                     }
                 }
                 Err(error) => {
                     eprintln!("hub: server `{}` unavailable: {error}", spec.name);
                 }
             }
+        }
+        // Bare names stay bare while exactly one server provides them; on a
+        // collision every owner keeps its `server__tool` name.
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for (_, tool) in &listed {
+            *counts.entry(tool.name.as_str()).or_default() += 1;
+        }
+        let mut aliases = self
+            .aliases
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        aliases.clear();
+        let mut out = Vec::with_capacity(listed.len());
+        for (spec, tool) in &listed {
+            let unique = counts.get(tool.name.as_str()).is_some_and(|count| *count == 1);
+            let name = if unique {
+                aliases.insert(
+                    tool.name.clone(),
+                    (spec.name.clone(), tool.name.clone()),
+                );
+                tool.name.clone()
+            } else {
+                format!("{}{SEPARATOR}{}", spec.name, tool.name)
+            };
+            let decision = policy::decision(
+                &registry.policies,
+                &spec.name,
+                &tool.name,
+                tool.read_only,
+            );
+            out.push(json!({
+                "name": name,
+                "description": match &tool.description {
+                    Some(description) => format!("[{}] {description}", spec.name),
+                    None => format!("[{}]", spec.name),
+                },
+                "inputSchema": tool.input_schema,
+                "annotations": { "readOnlyHint": tool.read_only },
+                "policy": decision_name(decision),
+            }));
         }
         out
     }
@@ -350,28 +387,43 @@ impl Hub {
 
     async fn route_call(
         &self,
-        prefixed: &str,
+        name: &str,
         arguments: Option<Map<String, Value>>,
     ) -> Result<Value, (i64, String)> {
-        let (server, tool) = prefixed
-            .split_once(SEPARATOR)
-            .ok_or((-32602, format!("tool name `{prefixed}` is not namespaced")))?;
-        if tool.is_empty() {
-            return Err((-32602, format!("empty tool name in `{prefixed}`")));
-        }
+        // `server__tool` always works; a bare name works while exactly one
+        // server provides it (see `tools_union`).
+        let (server, tool) = match name.split_once(SEPARATOR) {
+            Some((server, tool)) if !tool.is_empty() => {
+                (server.to_string(), tool.to_string())
+            }
+            _ => self
+                .aliases
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .get(name)
+                .cloned()
+                .ok_or_else(|| {
+                    (
+                        -32602,
+                        format!(
+                            "unknown tool `{name}` (prefix with `server__tool` if several servers provide it)"
+                        ),
+                    )
+                })?,
+        };
 
         let registry = self.registry();
         let spec = registry
-            .server(server)
+            .server(&server)
             .cloned()
             .ok_or((-32602, format!("no registered server `{server}`")))?;
 
         // Policy first: a denied call must not start a server or touch the disk.
-        let read_only = self.read_only_cached(server, tool);
-        match policy::decision(&registry.policies, server, tool, read_only) {
+        let read_only = self.read_only_cached(&server, &tool);
+        match policy::decision(&registry.policies, &server, &tool, read_only) {
             Decision::Deny => return Err((-32001, "denied by policy".to_string())),
             Decision::Ask => {
-                if !self.ask(server, tool, &arguments).await? {
+                if !self.ask(&server, &tool, &arguments).await? {
                     return Err((-32001, "denied in the dashboard".to_string()));
                 }
             }
@@ -382,7 +434,7 @@ impl Hub {
             .session_for(&spec)
             .await
             .map_err(|error| (-32603, error))?;
-        let result = mcp::call_tool(&client, tool, arguments)
+        let result = mcp::call_tool(&client, &tool, arguments)
             .await
             .map_err(|error| {
                 self.forget(&spec.name);
@@ -558,17 +610,17 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "fs__read",
-                "fs__list",
-                "fs__write",
-                "fs__edit",
-                "bash__bash",
+                "read",
+                "list",
+                "write",
+                "edit",
+                "bash",
             ]
         );
         // The hub forwards the real schemas, so web clients know the params.
         let write_tool = tools
             .iter()
-            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("fs__write"))
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("write"))
             .expect("write in union");
         assert_eq!(
             write_tool.pointer("/inputSchema/required"),
@@ -577,7 +629,7 @@ mod tests {
         );
         let edit_tool = tools
             .iter()
-            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("fs__edit"))
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("edit"))
             .expect("edit in union");
         assert_eq!(
             edit_tool.pointer("/inputSchema/required"),
@@ -595,7 +647,7 @@ mod tests {
         );
         let bash_tool = tools
             .iter()
-            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("bash__bash"))
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("bash"))
             .expect("bash in union");
         assert_eq!(
             bash_tool.pointer("/inputSchema/required"),
@@ -607,11 +659,17 @@ mod tests {
     #[tokio::test]
     async fn bash_executes_and_reports() {
         let hub = test_hub("exec");
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         hub.registry_mut_allow("bash", "bash");
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"bash__bash","arguments":{"command":"echo hello-p4"}}
+                "params":{"name":"bash","arguments":{"command":"echo hello-p4"}}
             }))
             .await;
         let body = body.expect("body");
@@ -634,10 +692,16 @@ mod tests {
     #[tokio::test]
     async fn bash_is_ask_by_default() {
         let hub = test_hub("exec-ask").with_timeout(Duration::from_millis(50));
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"bash__bash","arguments":{"command":"echo nope"}}
+                "params":{"name":"bash","arguments":{"command":"echo nope"}}
             }))
             .await;
         let body = body.expect("body");
@@ -651,12 +715,18 @@ mod tests {
     #[tokio::test]
     async fn write_read_roundtrip() {
         let hub = test_hub("write");
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         hub.registry_mut_allow("fs", "write");
         hub.registry_mut_allow("fs", "read");
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"fs__write","arguments":{"path":"note.txt","content":"hi p4"}}
+                "params":{"name":"write","arguments":{"path":"note.txt","content":"hi p4"}}
             }))
             .await;
         let body = body.expect("body");
@@ -664,7 +734,7 @@ mod tests {
         let (_, read) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"fs__read","arguments":{"path":"note.txt"}}
+                "params":{"name":"read","arguments":{"path":"note.txt"}}
             }))
             .await;
         let read = read.expect("read body");
@@ -701,7 +771,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"fs__list","arguments":{"path":"."}}
+                "params":{"name":"list","arguments":{"path":"."}}
             }))
             .await;
         let body = body.expect("body");
@@ -711,6 +781,12 @@ mod tests {
     #[tokio::test]
     async fn denied_tool_returns_32001_without_starting_the_server() {
         let hub = test_hub("deny");
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
         registry.set_policy("bash", "bash", Decision::Deny);
         registry::save(&hub.registry_path, &registry).unwrap();
@@ -718,19 +794,29 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"bash__bash","arguments":{"command":"should not run"}}
+                "params":{"name":"bash","arguments":{"command":"should not run"}}
             }))
             .await;
         assert_eq!(
             body.expect("body").pointer("/error/code"),
             Some(&json!(-32001))
         );
+        // The warm list above legitimately started sessions; the denied call
+        // itself must not start anything new, so it forgets nothing either.
+        hub.forget("bash");
+        hub.forget("fs");
         assert_eq!(hub.session_count(), 0, "denied call must not spawn a server");
     }
 
     #[tokio::test]
     async fn ask_without_an_answer_times_out_with_32002() {
         let hub = test_hub("ask").with_timeout(Duration::from_millis(150));
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
         registry.set_policy("fs", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
@@ -738,7 +824,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":4,"method":"tools/call",
-                "params":{"name":"fs__write","arguments":{"path":"deny-me.txt","content":"x"}}
+                "params":{"name":"write","arguments":{"path":"deny-me.txt","content":"x"}}
             }))
             .await;
         assert_eq!(
@@ -750,6 +836,12 @@ mod tests {
     #[tokio::test]
     async fn answered_prompt_runs_the_tool() {
         let hub = test_hub("approve").with_timeout(Duration::from_secs(5));
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
         registry.set_policy("fs", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
@@ -759,7 +851,7 @@ mod tests {
             tokio::spawn(async move {
                 hub.handle_rpc(json!({
                     "jsonrpc":"2.0","id":5,"method":"tools/call",
-                    "params":{"name":"fs__write","arguments":{"path":"deny-me.txt","content":"x"}}
+                    "params":{"name":"write","arguments":{"path":"deny-me.txt","content":"x"}}
                 }))
                 .await
             })
@@ -788,13 +880,19 @@ mod tests {
     #[tokio::test]
     async fn edit_roundtrip() {
         let hub = test_hub("edit");
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         hub.registry_mut_allow("fs", "write");
         hub.registry_mut_allow("fs", "edit");
         hub.registry_mut_allow("fs", "read");
         let (_, wrote) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"fs__write","arguments":{"path":"edit-me.txt","content":"line one\nline two\n"}}
+                "params":{"name":"write","arguments":{"path":"edit-me.txt","content":"line one\nline two\n"}}
             }))
             .await;
         assert!(wrote.expect("write body").get("error").is_none());
@@ -802,7 +900,7 @@ mod tests {
         let (_, vague) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"fs__edit","arguments":{"path":"edit-me.txt","oldString":"line","newString":"row"}}
+                "params":{"name":"edit","arguments":{"path":"edit-me.txt","oldString":"line","newString":"row"}}
             }))
             .await;
         let vague = vague.expect("vague body");
@@ -816,7 +914,7 @@ mod tests {
         let (_, edited) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":4,"method":"tools/call",
-                "params":{"name":"fs__edit","arguments":{"path":"edit-me.txt","oldString":"line two","newString":"row two"}}
+                "params":{"name":"edit","arguments":{"path":"edit-me.txt","oldString":"line two","newString":"row two"}}
             }))
             .await;
         let edited = edited.expect("edited body");
@@ -829,7 +927,7 @@ mod tests {
         let (_, read) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":5,"method":"tools/call",
-                "params":{"name":"fs__read","arguments":{"path":"edit-me.txt"}}
+                "params":{"name":"read","arguments":{"path":"edit-me.txt"}}
             }))
             .await;
         let read = read.expect("read body");
@@ -845,6 +943,12 @@ mod tests {
     #[tokio::test]
     async fn denied_prompt_returns_32001() {
         let hub = test_hub("prompt-deny").with_timeout(Duration::from_secs(5));
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
         registry.set_policy("fs", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
@@ -854,7 +958,7 @@ mod tests {
             tokio::spawn(async move {
                 hub.handle_rpc(json!({
                     "jsonrpc":"2.0","id":6,"method":"tools/call",
-                    "params":{"name":"fs__write","arguments":{"path":"deny-me.txt","content":"x"}}
+                    "params":{"name":"write","arguments":{"path":"deny-me.txt","content":"x"}}
                 }))
                 .await
             })
@@ -878,6 +982,12 @@ mod tests {
     #[tokio::test]
     async fn unknown_method_returns_32601() {
         let hub = test_hub("unknown");
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let (_, body) = hub
             .handle_rpc(json!({"jsonrpc":"2.0","id":7,"method":"resources/list"}))
             .await;
@@ -890,6 +1000,12 @@ mod tests {
     #[tokio::test]
     async fn notifications_are_accepted_without_a_body() {
         let hub = test_hub("notify");
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let (status, body) = hub
             .handle_rpc(json!({"jsonrpc":"2.0","method":"notifications/initialized"}))
             .await;
@@ -900,6 +1016,12 @@ mod tests {
     #[tokio::test]
     async fn unknown_tool_name_returns_32602() {
         let hub = test_hub("badtool");
+
+        // Real clients list before calling: that warms the hub's name map.
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":8,"method":"tools/call",

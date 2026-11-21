@@ -76,8 +76,8 @@ tools/demo-fs             MCP server: fs.read, scoped to the demo root
 ## Hub
 
 `http://127.0.0.1:8787/mcp` (override with `BIONICHAT_HUB_PORT`). JSON-RPC over
-POST, no SSE. Tools are namespaced `server__tool`, so `demo-ping__ping` routes
-to `ping` on the `demo-ping` server over that server's live stdio session.
+POST, no SSE. Tools keep their plain names while unique (`read`, `bash`); on a collision they fall back to `server__tool`.
+Calls route to the owning server over its live stdio session.
 
 ```bash
 curl -s -H 'Content-Type: application/json' \
@@ -86,7 +86,7 @@ curl -s -H 'Content-Type: application/json' \
 
 curl -s -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
-       "params":{"name":"demo-ping__ping","arguments":{}}}' \
+       "params":{"name":"read","arguments":{"path":"demo.txt"}}}' \
   http://127.0.0.1:8787/mcp
 ```
 
