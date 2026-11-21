@@ -5,10 +5,11 @@ Passes 1-4 of `PLAN.md`: the dashboard, a real registry, real file and shell
 MCP servers (`fs` with read/write/edit, `bash` with one shell tool), a
 local hub that aggregates them behind one MCP endpoint and forwards real
 input schemas, the OpenTunnel button, per-tool approval policy, and
-supervision. `read` is allowed by default; `write`, `edit` and
-`bash` ask for dashboard approval on every call. Approving with **Until
-restart** remembers the grant in memory only — a restart re-arms every Ask.
-No chats yet.
+supervision. Every tool runs without asking: a web chat gives up in seconds,
+so an approval prompt reads as a broken bridge. Set a tool to Ask or Deny in
+Settings when you want a brake, and Revoke link is the real kill switch. Every
+result carries the server clock inside its own text block, because some
+clients render only one block. No chats yet.
 
 ## Run
 

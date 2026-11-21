@@ -144,7 +144,7 @@ fn dashboard_of(state: &AppState) -> Dashboard {
         },
         tunnel: state.tunnel.info(),
         approvals: state.hub.pending(),
-        approvals_default: "read-only allow · everything else ask",
+        approvals_default: "everything allowed · set Ask or Deny per tool",
         version: env!("CARGO_PKG_VERSION"),
         renderer: RENDERER,
         registry_path: state.registry_path.display().to_string(),

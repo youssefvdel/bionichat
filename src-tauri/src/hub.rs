@@ -534,12 +534,28 @@ impl Hub {
                 (-32603, error)
             })?;
         // Time-awareness: every result carries the server clock, so a
-        // remote agent always knows *when* it observed something.
-        result.content.push(ContentBlock::text(format!(
+        // remote agent always knows *when* it observed something. The stamp
+        // rides inside the payload's own text block: clients that render only
+        // one block were dropping the actual output otherwise.
+        let stamp = format!(
             "[server time {} (local) = {}]",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z"),
             chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
-        )));
+        );
+        match result
+            .content
+            .iter_mut()
+            .rev()
+            .find_map(|block| match block {
+                ContentBlock::Text(text) => Some(text),
+                _ => None,
+            }) {
+            Some(text) => {
+                text.text.push_str("\n\n");
+                text.text.push_str(&stamp);
+            }
+            None => result.content.push(ContentBlock::text(stamp)),
+        }
         let value = serde_json::to_value(result).map_err(|e| (-32603, e.to_string()))?;
         let preview = value
             .pointer("/content/0/text")
@@ -820,8 +836,8 @@ mod tests {
         );
         assert_eq!(
             write_tool.pointer("/policy"),
-            Some(&json!("ask")),
-            "write must default to ask: {write_tool}"
+            Some(&json!("allow")),
+            "write must default to allow: {write_tool}"
         );
         let bash_tool = tools
             .iter()
@@ -856,7 +872,8 @@ mod tests {
             .pointer("/result/content/0/text")
             .and_then(Value::as_str)
             .expect("report text");
-        let report: Value = serde_json::from_str(text).expect("report is JSON");
+        let payload = text.split("\n\n[server time ").next().expect("payload");
+        let report: Value = serde_json::from_str(payload).expect("report is JSON");
         assert_eq!(report.pointer("/exit_code"), Some(&json!(0)));
         assert!(
             report
@@ -868,7 +885,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bash_is_ask_by_default() {
+    async fn bash_runs_without_a_prompt() {
         let hub = test_hub("exec-ask").with_timeout(Duration::from_millis(50));
 
         // Real clients list before calling: that warms the hub's name map.
@@ -883,10 +900,14 @@ mod tests {
             }))
             .await;
         let body = body.expect("body");
+        assert!(
+            body.get("error").is_none(),
+            "bash must never wait on a human: {body}"
+        );
         assert_eq!(
-            body.pointer("/error/code"),
-            Some(&json!(-32002)),
-            "unanswered bash must time out, never run: {body}"
+            body.pointer("/result/isError"),
+            Some(&json!(false)),
+            "bash must actually run: {body}"
         );
     }
 
@@ -919,7 +940,7 @@ mod tests {
         assert!(
             read.pointer("/result/content/0/text")
                 .and_then(serde_json::Value::as_str)
-                .is_some_and(|text| text.ends_with("1: hi p4")),
+                .is_some_and(|text| text.contains("1: hi p4")),
             "written file must read back numbered: {read}"
         );
     }
@@ -1130,16 +1151,21 @@ mod tests {
             .iter()
             .filter_map(|block| block.get("text").and_then(serde_json::Value::as_str))
             .collect();
-        assert!(
-            texts.len() >= 2,
-            "stamped result needs the tool output plus a time block: {body}"
+        assert_eq!(
+            texts.len(),
+            1,
+            "the stamp rides inside the payload block, so clients that render one block still see the output: {body}"
         );
-        let stamp = texts.last().expect("time block");
+        let stamp = texts.last().expect("payload block");
+        let tail = stamp
+            .rsplit_once("\n\n")
+            .map(|(_, tail)| tail)
+            .expect("payload and stamp are separated by a blank line");
         assert!(
-            stamp.starts_with("[server time ")
-                && stamp.contains(" (local) = ")
-                && stamp.ends_with(']'),
-            "last block must be the server-time stamp, got: {stamp}"
+            tail.starts_with("[server time ")
+                && tail.contains(" (local) = ")
+                && tail.ends_with(']'),
+            "block must end with the server-time stamp, got: {tail}"
         );
     }
 

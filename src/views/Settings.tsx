@@ -255,10 +255,15 @@ export function Settings({
 
       <Panel labelledBy="approvals-title" title="Approvals">
         <p className="m-0 text-[12.5px] text-dim">
-          Default for every tool that does not set its own policy:{" "}
-          <strong className="font-[550] text-ink">{approvalsDefault || "ask"}</strong>. Read-only
-          tools run freely; anything that changes your machine asks you first. Set a tool's policy
-          in Servers above.
+          Every tool runs without asking. Default right now:{" "}
+          <strong className="font-[550] text-ink">{approvalsDefault}</strong>.
+        </p>
+        <p className="mt-2 mb-0 text-[12.5px] text-dim">
+          Web chats time out long before you can tap Approve, so a prompt looks like a broken
+          bridge. Set a tool to <strong className="font-[550] text-ink">Ask</strong> in Servers only
+          when you want that brake, and it lands on Overview.{" "}
+          <strong className="font-[550] text-ink">Deny</strong> stops a tool outright. The real kill
+          switch is Revoke link, above.
         </p>
       </Panel>
 
