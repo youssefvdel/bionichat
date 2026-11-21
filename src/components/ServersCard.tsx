@@ -36,8 +36,8 @@ function ServerNode({
   }
 
   return (
-    <li className="overflow-hidden rounded-md border border-edge bg-raised">
-      <div className="flex min-h-[42px] flex-wrap items-center gap-x-2.5 gap-y-1.5 px-3 py-2">
+    <li className="clay-well overflow-hidden">
+      <div className="flex min-h-[44px] flex-wrap items-center gap-x-2.5 gap-y-1.5 px-3.5 py-2">
         <span className="font-mono text-[13px] font-semibold whitespace-nowrap">{row.name}</span>
         <span className="min-w-0 flex-1 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-dim">
           {row.transport}
@@ -47,7 +47,7 @@ function ServerNode({
             {row.secret_keys.map((key) => (
               <span
                 key={key}
-                className="rounded-full border border-edge px-2 py-0.5 font-mono text-[11px] text-dim tabular-nums"
+                className="rounded-full bg-ground px-2 py-0.5 font-mono text-[11px] text-dim tabular-nums"
               >
                 {key} ••••
               </span>
@@ -83,13 +83,13 @@ function ServerNode({
               >
                 <span className="font-mono text-xs text-ink">{tool.name}</span>
                 {tool.read_only && (
-                  <span className="rounded-full border border-edge px-2 py-0.5 font-mono text-[11px] text-dim">
+                  <span className="rounded-full bg-ground px-2 py-0.5 font-mono text-[11px] text-dim">
                     read-only
                   </span>
                 )}
                 {tool.description && <span className="text-xs text-dim">{tool.description}</span>}
                 <select
-                  className="ml-auto h-7 cursor-pointer rounded-full border border-control bg-surface px-2 font-[inherit] text-xs text-ink"
+                  className="clay-select ml-auto"
                   title={`Policy for ${row.name} / ${tool.name}`}
                   value={tool.policy}
                   onChange={(e) => void policy(row.name, tool.name, e.target.value)}
@@ -133,16 +133,16 @@ export function ServersCard({
         </>
       }
       right={
-        <span className="flex items-center gap-2.5 text-xs text-dim">
+        <span className="flex items-center gap-2.5 text-[12px] text-dim">
           approvals default: <strong className="text-ink">{approvalsDefault || "ask"}</strong>
           <ActionButton small onClick={() => void refreshServers()}>Refresh</ActionButton>
         </span>
       }
     >
       {rows === null ? (
-        <p className="m-0 text-dim">Loading registry…</p>
+        <p className="m-0 text-[12.5px] text-dim">Loading registry…</p>
       ) : rows.length === 0 ? (
-        <p className="m-0 text-dim">No servers registered yet. Paste JSON below.</p>
+        <p className="m-0 text-[12.5px] text-dim">No servers registered yet. Paste JSON below.</p>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-live="polite">
           {rows.map((row) => (

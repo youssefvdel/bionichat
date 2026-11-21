@@ -1,3 +1,18 @@
+/* Soft chips and status marks, tinted from the page's own palette.
+   Colours stay quiet: a chip is a tinted well, never a bright badge. */
+
+const tone: Record<string, string> = {
+  pending: "bg-[#fdf3e3] text-warn",
+  ready: "bg-[#eaf6ee] text-good",
+  error: "bg-[#fdecea] text-bad",
+  starting: "bg-raised text-sub",
+  off: "bg-raised text-dim",
+  idle: "bg-raised text-dim",
+  ok: "bg-[#eaf6ee] text-good",
+  denied: "bg-[#fdecea] text-bad",
+  timeout: "bg-raised text-dim",
+};
+
 export function Mark({ size = 18 }: { size?: number }) {
   return (
     <svg
@@ -16,23 +31,12 @@ export function Mark({ size = 18 }: { size?: number }) {
   );
 }
 
-const pillFor: Record<string, string> = {
-  pending: "bg-raised text-warn",
-  ready: "bg-raised text-good",
-  error: "bg-raised text-bad",
-  starting: "bg-raised text-dim",
-  off: "bg-raised text-dim",
-  idle: "bg-raised text-dim",
-  ok: "bg-raised text-good",
-  denied: "bg-raised text-bad",
-  timeout: "bg-raised text-dim",
-};
-
 export function Pill({ status, label }: { status: string; label?: string }) {
-  const cls = pillFor[status] ?? pillFor["idle"];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] leading-none whitespace-nowrap tabular-nums ${cls}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[11.5px] leading-none font-[520] whitespace-nowrap tabular-nums ${
+        tone[status] ?? tone["idle"]
+      }`}
     >
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
       {label ?? status}

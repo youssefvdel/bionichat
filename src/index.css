@@ -1,21 +1,33 @@
 @import "tailwindcss";
 
+/* Calm clay: OpenCode's cool neutral palette (Apple-like greys, one blue)
+   carried on soft, puffy clay surfaces. Depth comes from layered soft
+   shadows and a top highlight, never from hard borders. */
+
 @theme {
-  --color-ground: #f1f0ec;
+  --color-ground: #fbfbfb;
   --color-surface: #ffffff;
-  --color-raised: #f7f7f4;
-  --color-edge: #e2e1dc;
-  --color-rule: #ecebe6;
-  --color-control: #d4d3cc;
-  --color-ink: #1a1c19;
-  --color-dim: #68705f;
-  --color-accent: #1d5fbf;
+  --color-raised: #f4f4f6;
+  --color-edge: #ececf0;
+  --color-rule: #f0f0f3;
+  --color-control: #dcdce2;
+
+  --color-ink: #1d1d1f;
+  --color-sub: #424245;
+  --color-dim: #6e6e73;
+
+  --color-accent: #007aff;
   --color-accentink: #ffffff;
-  --color-good: #1d7a4f;
-  --color-bad: #b3372f;
-  --color-warn: #9a6a00;
-  --font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --color-good: #0f7b3f;
+  --color-bad: #c4342b;
+  --color-warn: #9a6200;
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --radius-clay: 22px;
+  --radius-well: 14px;
 }
 
 html,
@@ -27,35 +39,186 @@ body {
 body {
   background: var(--color-ground);
   color: var(--color-ink);
-  font: 13px/1.55 var(--font-sans);
+  font: 13.5px/1.55 var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: var(--color-accent);
-  color: var(--color-accentink);
+  background: color-mix(in srgb, var(--color-accent) 18%, white);
+  color: var(--color-ink);
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-control);
-  border-radius: 5px;
-  border: 2px solid var(--color-ground);
+  background: #d8d8de;
+  border: 3px solid var(--color-ground);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c4c4cc;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* Custom titlebar drag region (Tauri reads this attribute). */
-[data-tauri-drag-region] {
-  -webkit-app-region: drag;
+/* ---------- clay surfaces ---------- */
+
+/* A raised panel: the stuff you read and work in. */
+.clay-panel {
+  background: var(--color-surface);
+  border-radius: var(--radius-clay);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(20, 22, 28, 0.04),
+    0 14px 34px -20px rgba(20, 22, 28, 0.18);
 }
-[data-tauri-drag-region] button {
-  -webkit-app-region: no-drag;
+
+/* A pressed well: inputs, lists, inner areas. Sits *into* the panel. */
+.clay-well {
+  background: var(--color-raised);
+  border-radius: var(--radius-well);
+  box-shadow:
+    inset 0 1px 2px rgba(20, 22, 28, 0.05),
+    inset 0 0 0 1px rgba(20, 22, 28, 0.03);
 }
+
+/* The canonical clay button: puffy, top-lit, presses in. */
+.clay-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(20, 22, 28, 0.06),
+    0 8px 20px -12px rgba(20, 22, 28, 0.24);
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (hover: hover) {
+  .clay-button:hover:not(:disabled) {
+    background: #fdfdfe;
+    box-shadow:
+      inset 0 1px 0 #fff,
+      0 2px 4px rgba(20, 22, 28, 0.07),
+      0 12px 26px -12px rgba(20, 22, 28, 0.26);
+  }
+}
+
+.clay-button:active:not(:disabled) {
+  transform: scale(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(20, 22, 28, 0.09),
+    0 1px 1px rgba(20, 22, 28, 0.04);
+}
+
+.clay-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 28, 0.04);
+}
+
+.clay-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The one action on the screen. Still clay, just darker clay. */
+.clay-button-primary {
+  background: var(--color-ink);
+  color: #fff;
+  font-weight: 550;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 1px 2px rgba(20, 22, 28, 0.14),
+    0 12px 26px -14px rgba(20, 22, 28, 0.5);
+}
+
+@media (hover: hover) {
+  .clay-button-primary:hover:not(:disabled) {
+    background: #333336;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 2px 4px rgba(20, 22, 28, 0.16),
+      0 16px 30px -14px rgba(20, 22, 28, 0.55);
+  }
+}
+
+.clay-button-primary:active:not(:disabled) {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
+}
+
+.clay-button-sm {
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+/* ---------- inputs ---------- */
+
+.clay-input {
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-well);
+  background: var(--color-raised);
+  color: var(--color-ink);
+  padding: 11px 13px;
+  font: 12.5px/1.6 var(--font-mono);
+  resize: vertical;
+  box-shadow:
+    inset 0 1px 2px rgba(20, 22, 28, 0.06),
+    inset 0 0 0 1px rgba(20, 22, 28, 0.035);
+  transition: box-shadow 140ms ease;
+}
+
+.clay-input::placeholder {
+  color: #9a9aa1;
+}
+
+.clay-input:focus {
+  outline: none;
+  box-shadow:
+    inset 0 1px 2px rgba(20, 22, 28, 0.05),
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+/* ---------- select ---------- */
+
+.clay-select {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-raised);
+  color: var(--color-ink);
+  font: 12.5px/1 var(--font-sans);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(20, 22, 28, 0.05);
+}
+
+.clay-select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- details ---------- */
 
 details.tools > summary {
   list-style: none;
@@ -66,24 +229,38 @@ details.tools > summary::-webkit-details-marker {
 details.tools > summary::before {
   content: "▸";
   margin-right: 8px;
+  color: var(--color-dim);
 }
 details.tools[open] > summary::before {
   content: "▾";
 }
 
+/* ---------- titlebar drag ---------- */
+
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+}
+[data-tauri-drag-region] button {
+  -webkit-app-region: no-drag;
+}
+
+/* ---------- motion ---------- */
+
 @keyframes row-in {
   from {
     opacity: 0;
-    transform: translateX(-8px);
+    transform: translateY(-4px);
   }
 }
 
 .animate-row-in {
-  animation: row-in 0.3s ease-out both;
+  animation: row-in 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     transition: none !important;
     animation: none !important;
   }

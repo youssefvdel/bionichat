@@ -111,14 +111,14 @@ export default function App() {
   return (
     <div className="flex min-h-screen flex-col bg-ground text-ink">
       <Titlebar renderer={renderer} />
-      <main className="mx-auto flex w-full max-w-[1120px] flex-col gap-6 px-8 pt-5 pb-10">
+      <main className="mx-auto flex w-full max-w-[1080px] flex-col gap-5 px-7 pt-2 pb-10">
         {/* time-sensitive first: approvals above everything */}
         <ApprovalsCard list={approvals} onChange={setApprovals} />
         <TunnelCard info={tunnel} onChange={setTunnel} />
 
-        <section aria-labelledby="hub-title" className="rounded-md border border-edge bg-surface px-5 pt-[18px] pb-5">
+        <section aria-labelledby="hub-title" className="clay-panel px-5 pt-4 pb-5">
           <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h2 id="hub-title" className="text-[15px] font-semibold">
+            <h2 id="hub-title" className="text-[14px] font-[550] tracking-[-0.005em]">
               Hub
             </h2>
             <Pill status="idle" label={hubSessions} />
@@ -143,7 +143,7 @@ export default function App() {
           <p className="m-0 font-mono text-xs text-bad">{loadError}</p>
         )}
       </main>
-      <footer className="mx-auto flex w-full max-w-[1120px] items-center gap-2 border-t border-rule px-8 py-3">
+      <footer className="mx-auto flex w-full max-w-[1080px] items-center gap-2 px-7 py-3">
         <span className="text-xs text-dim">registry</span>
         <code className="overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap text-dim">
           {registryPath}

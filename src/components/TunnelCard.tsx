@@ -21,10 +21,19 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function CopyButton({ text, disabled }: { text: string; disabled?: boolean }) {
+function CopyButton({
+  text,
+  disabled,
+  primary,
+}: {
+  text: string;
+  disabled?: boolean;
+  primary?: boolean;
+}) {
   const [label, setLabel] = useState("Copy URL");
   return (
     <ActionButton
+      primary={primary}
       disabled={disabled}
       onClick={() => {
         if (!text) return;
@@ -85,29 +94,38 @@ export function TunnelCard({
       title="Tunnel"
       right={<Pill status={busy ? "starting" : info.status} />}
     >
-      <p className="m-0 text-dim">
+      <p className="m-0 text-[12.5px] text-dim">
         {live
           ? "Public route live. Anyone with this URL can call the hub: demo data only, no auth."
           : "No public route. The tunnel exposes the hub as-is: demo data only, no auth."}
       </p>
-      <code className="mt-3 block w-full font-mono text-[19px] leading-snug break-all text-ink">
+      <code className="mt-3 block w-full font-mono text-[18px] leading-snug break-all text-ink">
         {info.public_url ?? "no public URL yet"}
       </code>
       <div className="mt-3 flex flex-wrap items-center gap-2.5">
-        <CopyButton text={info.public_url ?? ""} disabled={!info.public_url} />
-        <ActionButton primary disabled={busy || live} onClick={() => void start()}>
-          {busy ? "Starting…" : "Start tunnel"}
-        </ActionButton>
-        <ActionButton disabled={!busy && !live} onClick={() => void stop()}>
-          Stop
-        </ActionButton>
-        <ActionButton
-          disabled={!busy && !live}
-          onClick={() => void revoke()}
-          title="Burn this URL for good; next start mints a fresh one"
-        >
-          {armed ? "Sure? Click again to burn" : "Revoke link"}
-        </ActionButton>
+        {/* The one primary action follows the state: copy while live,
+            start while down. A disabled primary outranks nothing. */}
+        <CopyButton
+          text={info.public_url ?? ""}
+          disabled={!info.public_url}
+          primary={live}
+        />
+        {!live && (
+          <ActionButton primary disabled={busy} onClick={() => void start()}>
+            {busy ? "Starting…" : "Start tunnel"}
+          </ActionButton>
+        )}
+        {live && (
+          <>
+            <ActionButton onClick={() => void stop()}>Stop</ActionButton>
+            <ActionButton
+              onClick={() => void revoke()}
+              title="Burn this URL for good; next start mints a fresh one"
+            >
+              {armed ? "Sure? Click again to burn" : "Revoke link"}
+            </ActionButton>
+          </>
+        )}
       </div>
       {(error || info.error) && (
         <p role="alert" className="mt-2 font-mono text-xs break-words text-bad">

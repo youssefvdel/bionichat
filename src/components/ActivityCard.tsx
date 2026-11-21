@@ -10,14 +10,14 @@ export function ActivityCard({ feed }: { feed: ActivityEntry[] }) {
       title="Live activity"
       right={<Pill status="idle" label={String(feed.length)} />}
     >
-      <p className="m-0 text-xs text-dim">Every tool call as it happens, newest first.</p>
+      <p className="m-0 text-[12px] text-dim">Every tool call as it happens, newest first.</p>
       <ul className="mt-1 flex flex-col" aria-live="polite">
         {feed.map((entry, i) => (
           <li
             key={`${entry.time}-${entry.server}-${entry.tool}-${i}`}
-            className="border-t border-rule py-1.5 first:border-t-0"
+            className="border-t border-rule py-2 first:border-t-0"
           >
-            <div className="flex min-h-7 items-center gap-2.5">
+            <div className="animate-row-in flex min-h-7 items-center gap-2.5">
               <span className="font-mono text-xs font-semibold whitespace-nowrap text-ink">
                 {entry.server} / {entry.tool}
               </span>

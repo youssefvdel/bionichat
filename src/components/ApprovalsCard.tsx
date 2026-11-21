@@ -33,17 +33,17 @@ export function ApprovalsCard({
       title="Waiting for you"
       right={<Pill status="pending" label={String(list.length)} />}
     >
-      <p className="m-0 text-xs text-dim">Calls held by the Ask policy. They time out in 60s.</p>
+      <p className="m-0 text-[12px] text-dim">Calls held by the Ask policy. They time out in 60s.</p>
       <ul className="mt-1 flex flex-col gap-2.5" aria-live="assertive">
         {list.map((p) => (
           <li
             key={p.id}
-            className="flex flex-col gap-2.5 rounded-md border border-[#6b5a2a] bg-raised p-3"
+            className="clay-well flex flex-col gap-2.5 p-3.5"
           >
             <span className="font-mono text-[13px] font-semibold text-ink">
               {p.server} / {p.tool}
             </span>
-            <code className="block max-h-[4.5em] overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-ink">
+            <code className="block max-h-[4.5em] overflow-auto font-mono text-[12px] break-words whitespace-pre-wrap text-sub">
               {previewArgs(p.arguments)}
             </code>
             <div className="flex flex-wrap gap-2.5">

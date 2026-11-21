@@ -12,9 +12,12 @@ export function Card({
   labelledBy: string;
 }) {
   return (
-    <section aria-labelledby={labelledBy} className="rounded-md border border-edge bg-surface px-5 pt-[18px] pb-5">
+    <section
+      aria-labelledby={labelledBy}
+      className="clay-panel px-5 pt-4 pb-5"
+    >
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 id={labelledBy} className="text-[15px] font-semibold">
+        <h2 id={labelledBy} className="text-[14px] font-[550] tracking-[-0.005em]">
           {title}
         </h2>
         {right}
@@ -45,13 +48,13 @@ export function ActionButton({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center rounded-full border font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${
-        small ? "min-h-7 px-3 text-xs" : "min-h-[34px] px-4 text-[13px]"
-      } ${
-        primary
-          ? "border-ink bg-ink font-semibold text-ground hover:opacity-90"
-          : "border-control bg-transparent text-ink hover:border-accent active:translate-y-px"
-      }`}
+      className={[
+        "clay-button",
+        primary ? "clay-button-primary" : "",
+        small ? "clay-button-sm" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       {children}
     </button>
