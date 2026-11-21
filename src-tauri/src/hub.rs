@@ -1,14 +1,18 @@
 //! Hub: a local StreamableHTTP (JSON, no SSE) MCP endpoint that aggregates
-//! every server in the registry into one tool list and routes calls back over
-//! each server's own stdio session.
+//! every server in the registry into one tool list, routes calls back over each
+//! server's own stdio session, and enforces the approval policy.
 //!
 //! Tool naming: `server__tool` (first `__` splits server from tool, so server
 //! names registered through the dashboard must not contain `__`).
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
 };
 
 use axum::{
@@ -18,30 +22,83 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
+use serde::Serialize;
 use serde_json::{Map, Value, json};
+use tauri::{AppHandle, Emitter};
 
 use crate::{
     mcp::{self, Client, ToolInfo},
-    registry::{self, ServerSpec},
+    policy,
+    registry::{self, Decision, Registry, ServerSpec},
 };
 
 pub const DEFAULT_PORT: u16 = 8787;
 pub const SEPARATOR: &str = "__";
+pub const ASK_TIMEOUT: Duration = Duration::from_secs(60);
+/// A dead child never answers, so one short probe settles liveness.
+const LIVENESS_TIMEOUT: Duration = Duration::from_secs(5);
+
+struct Pending {
+    server: String,
+    tool: String,
+    arguments: Option<Map<String, Value>>,
+    reply: tokio::sync::oneshot::Sender<bool>,
+}
+
+/// What the dashboard shows for an open approval prompt.
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingView {
+    pub id: u64,
+    pub server: String,
+    pub tool: String,
+    pub arguments: Option<Map<String, Value>>,
+}
 
 pub struct Hub {
     port: u16,
     registry_path: PathBuf,
     sessions: Mutex<HashMap<String, Arc<Client>>>,
+    /// Last known `tools/list` hints per server, so a cold call still knows
+    /// whether a tool is read-only without spawning anything to find out.
+    catalog: Mutex<HashMap<String, HashMap<String, bool>>>,
+    /// Servers that died while auto-restart was off. They stay down until the
+    /// user restarts them, so a crash cannot be papered over by a lazy connect.
+    quarantine: Mutex<HashSet<String>>,
+    pending: Mutex<HashMap<u64, Pending>>,
+    next_id: AtomicU64,
+    app: Option<AppHandle>,
+    ask_timeout: Duration,
 }
 
 type Rpc = (StatusCode, Option<Value>);
 
 impl Hub {
-    pub fn new(registry_path: PathBuf, port: u16) -> Arc<Self> {
+    pub fn new(registry_path: PathBuf, port: u16, app: Option<AppHandle>) -> Arc<Self> {
         Arc::new(Self {
             port,
             registry_path,
             sessions: Mutex::new(HashMap::new()),
+            catalog: Mutex::new(HashMap::new()),
+            quarantine: Mutex::new(HashSet::new()),
+            pending: Mutex::new(HashMap::new()),
+            next_id: AtomicU64::new(1),
+            app,
+            ask_timeout: ASK_TIMEOUT,
+        })
+    }
+
+    #[cfg(test)]
+    fn with_timeout(self: Arc<Self>, timeout: Duration) -> Arc<Self> {
+        Arc::new(Self {
+            port: self.port,
+            registry_path: self.registry_path.clone(),
+            sessions: Mutex::new(HashMap::new()),
+            catalog: Mutex::new(HashMap::new()),
+            quarantine: Mutex::new(HashSet::new()),
+            pending: Mutex::new(HashMap::new()),
+            next_id: AtomicU64::new(1),
+            app: None,
+            ask_timeout: timeout,
         })
     }
 
@@ -54,74 +111,241 @@ impl Hub {
     }
 
     pub fn session_count(&self) -> usize {
-        self.guard().len()
+        self.sessions().len()
     }
 
-    fn guard(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<Client>>> {
+    pub fn registry(&self) -> Registry {
+        registry::load(&self.registry_path).unwrap_or_default()
+    }
+
+    fn sessions(&self) -> std::sync::MutexGuard<'_, HashMap<String, Arc<Client>>> {
         self.sessions
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn specs(&self) -> Vec<ServerSpec> {
-        registry::load(&self.registry_path).unwrap_or_default()
-    }
-
     fn cached(&self, name: &str) -> Option<Arc<Client>> {
-        self.guard().get(name).cloned()
+        self.sessions().get(name).cloned()
     }
 
-    fn forget(&self, name: &str) {
-        self.guard().remove(name);
+    pub fn forget(&self, name: &str) {
+        self.sessions().remove(name);
+        self.catalog
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(name);
     }
 
-    /// Reuse the live session for `spec`, connecting on first use.
+    /// `None` when no session exists; `Some(closed)` for a live one.
+    ///
+    /// `RunningService::is_closed()` only reflects an explicit cancel, so a
+    /// child that dies under us still reports open. Ask the peer instead.
+    pub async fn session_closed(&self, name: &str) -> Option<bool> {
+        let client = self.cached(name)?;
+        if client.is_closed() {
+            return Some(true);
+        }
+        let answered = tokio::time::timeout(LIVENESS_TIMEOUT, client.list_all_tools()).await;
+        Some(answered.is_err() || answered.is_ok_and(|result| result.is_err()))
+    }
+
+    /// Reuse the live session for `spec`, connecting on first use. A server
+    /// quarantined by the supervisor refuses to start until someone releases it.
     pub async fn session_for(&self, spec: &ServerSpec) -> Result<Arc<Client>, String> {
+        if self.is_quarantined(&spec.name) {
+            return Err(format!(
+                "`{}` crashed; press Restart or enable auto-restart",
+                spec.name
+            ));
+        }
         if let Some(client) = self.cached(&spec.name) {
             return Ok(client);
         }
         let client = Arc::new(mcp::connect(spec).await?);
-        self.guard().insert(spec.name.clone(), client.clone());
+        self.sessions().insert(spec.name.clone(), client.clone());
         Ok(client)
     }
 
+    fn quarantine(&self) -> std::sync::MutexGuard<'_, HashSet<String>> {
+        self.quarantine
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn is_quarantined(&self, name: &str) -> bool {
+        self.quarantine().contains(name)
+    }
+
+    pub fn hold(&self, name: &str) {
+        self.quarantine().insert(name.to_string());
+    }
+
+    pub fn release(&self, name: &str) {
+        self.quarantine().remove(name);
+    }
+
     /// Tool list for one server, reconnecting once if the cached child died.
+    /// Every success also refreshes the read-only catalog the policy reads.
     pub async fn tools_for(&self, spec: &ServerSpec) -> Result<Vec<ToolInfo>, String> {
         let client = self.session_for(spec).await?;
         match mcp::list_tools(&client).await {
-            Ok(tools) => Ok(tools),
+            Ok(tools) => {
+                self.remember(&spec.name, &tools);
+                Ok(tools)
+            }
             Err(first) => {
                 self.forget(&spec.name);
                 let fresh = self.session_for(spec).await?;
-                mcp::list_tools(&fresh)
+                let tools = mcp::list_tools(&fresh)
                     .await
-                    .map_err(|second| format!("{first}; after reconnect: {second}"))
+                    .map_err(|second| format!("{first}; after reconnect: {second}"))?;
+                self.remember(&spec.name, &tools);
+                Ok(tools)
             }
         }
     }
 
-    /// Namespaced union across every registered server.
+    fn remember(&self, server: &str, tools: &[ToolInfo]) {
+        let hints = tools
+            .iter()
+            .map(|tool| (tool.name.clone(), tool.read_only))
+            .collect();
+        self.catalog
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(server.to_string(), hints);
+    }
+
+    /// Unknown tools are treated as mutating, so a cold call asks instead of
+    /// silently skipping the gate.
+    fn read_only_cached(&self, server: &str, tool: &str) -> bool {
+        self.catalog
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(server)
+            .and_then(|hints| hints.get(tool).copied())
+            .unwrap_or(false)
+    }
+
+    /// Namespaced union across every registered server, with the effective
+    /// policy attached so the dashboard can render the dropdown.
     pub async fn tools_union(&self) -> Vec<Value> {
+        let registry = self.registry();
         let mut out = Vec::new();
-        for spec in self.specs() {
-            match self.tools_for(&spec).await {
-                Ok(tools) => out.extend(tools.into_iter().map(|tool| {
-                    json!({
-                        "name": format!("{}{SEPARATOR}{}", spec.name, tool.name),
-                        "description": match tool.description {
-                            Some(description) => format!("[{}] {description}", spec.name),
-                            None => format!("[{}]", spec.name),
-                        },
-                        "inputSchema": { "type": "object" },
-                        "annotations": { "readOnlyHint": tool.read_only },
-                    })
-                })),
+        for spec in &registry.servers {
+            match self.tools_for(spec).await {
+                Ok(tools) => {
+                    for tool in tools {
+                        let decision = policy::decision(
+                            &registry.policies,
+                            &spec.name,
+                            &tool.name,
+                            tool.read_only,
+                        );
+                        out.push(json!({
+                            "name": format!("{}{SEPARATOR}{}", spec.name, tool.name),
+                            "description": match tool.description {
+                                Some(description) => format!("[{}] {description}", spec.name),
+                                None => format!("[{}]", spec.name),
+                            },
+                            "inputSchema": { "type": "object" },
+                            "annotations": { "readOnlyHint": tool.read_only },
+                            "policy": decision_name(decision),
+                        }));
+                    }
+                }
                 Err(error) => {
                     eprintln!("hub: server `{}` unavailable: {error}", spec.name);
                 }
             }
         }
         out
+    }
+
+    /// Open approval prompts, for the dashboard banner.
+    pub fn pending(&self) -> Vec<PendingView> {
+        let mut pending = self
+            .pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut views: Vec<PendingView> = pending
+            .iter()
+            .map(|(id, entry)| PendingView {
+                id: *id,
+                server: entry.server.clone(),
+                tool: entry.tool.clone(),
+                arguments: entry.arguments.clone(),
+            })
+            .collect();
+        views.sort_by_key(|view| view.id);
+        pending.retain(|_, _| true);
+        views
+    }
+
+    /// Answer a prompt. Returns false when the id is unknown (already timed out).
+    pub fn resolve(&self, id: u64, approve: bool) -> bool {
+        let entry = self
+            .pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&id);
+        match entry {
+            Some(pending) => pending.reply.send(approve).is_ok(),
+            None => false,
+        }
+    }
+
+    async fn ask(
+        &self,
+        server: &str,
+        tool: &str,
+        arguments: &Option<Map<String, Value>>,
+    ) -> Result<bool, (i64, String)> {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let (reply, answer) = tokio::sync::oneshot::channel();
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(
+                id,
+                Pending {
+                    server: server.to_string(),
+                    tool: tool.to_string(),
+                    arguments: arguments.clone(),
+                    reply,
+                },
+            );
+
+        if let Some(app) = &self.app {
+            let _ = app.emit(
+                "approval-requested",
+                json!({
+                    "id": id,
+                    "server": server,
+                    "tool": tool,
+                    "arguments": arguments,
+                }),
+            );
+        }
+
+        match tokio::time::timeout(self.ask_timeout, answer).await {
+            Ok(Ok(true)) => Ok(true),
+            Ok(Ok(false)) => Ok(false),
+            Ok(Err(_)) => Err((-32002, "approval channel closed".to_string())),
+            Err(_) => {
+                self.pending
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .remove(&id);
+                Err((
+                    -32002,
+                    format!(
+                        "approval timed out after {}s",
+                        self.ask_timeout.as_secs().max(1)
+                    ),
+                ))
+            }
+        }
     }
 
     async fn route_call(
@@ -132,15 +356,26 @@ impl Hub {
         let (server, tool) = prefixed
             .split_once(SEPARATOR)
             .ok_or((-32602, format!("tool name `{prefixed}` is not namespaced")))?;
-
-        let spec = self
-            .specs()
-            .into_iter()
-            .find(|candidate| candidate.name == server)
-            .ok_or((-32602, format!("no registered server `{server}`")))?;
-
         if tool.is_empty() {
             return Err((-32602, format!("empty tool name in `{prefixed}`")));
+        }
+
+        let registry = self.registry();
+        let spec = registry
+            .server(server)
+            .cloned()
+            .ok_or((-32602, format!("no registered server `{server}`")))?;
+
+        // Policy first: a denied call must not start a server or touch the disk.
+        let read_only = self.read_only_cached(server, tool);
+        match policy::decision(&registry.policies, server, tool, read_only) {
+            Decision::Deny => return Err((-32001, "denied by policy".to_string())),
+            Decision::Ask => {
+                if !self.ask(server, tool, &arguments).await? {
+                    return Err((-32001, "denied in the dashboard".to_string()));
+                }
+            }
+            Decision::Allow => {}
         }
 
         let client = self
@@ -184,7 +419,7 @@ impl Hub {
                         "protocolVersion": protocol,
                         "capabilities": { "tools": { "listChanged": false } },
                         "serverInfo": { "name": "bionichat-hub", "version": env!("CARGO_PKG_VERSION") },
-                        "instructions": "Aggregated MCP hub. Tool names are `server__tool`; unknown names return -32602."
+                        "instructions": "Aggregated MCP hub. Tool names are `server__tool`; unknown names return -32602, policy denials -32001, approval timeouts -32002."
                     }),
                 )
             }
@@ -197,10 +432,7 @@ impl Hub {
                 let Some(name) = params.get("name").and_then(Value::as_str) else {
                     return rpc_error(id, -32602, "tools/call needs a string `name`".into());
                 };
-                let arguments = params
-                    .get("arguments")
-                    .and_then(Value::as_object)
-                    .cloned();
+                let arguments = params.get("arguments").and_then(Value::as_object).cloned();
                 match self.route_call(name, arguments).await {
                     Ok(result) => ok(id, result),
                     Err((code, message)) => rpc_error(id, code, message),
@@ -221,6 +453,14 @@ impl Hub {
         axum::serve(listener, app)
             .await
             .map_err(|e| format!("hub stopped: {e}"))
+    }
+}
+
+fn decision_name(decision: Decision) -> &'static str {
+    match decision {
+        Decision::Allow => "allow",
+        Decision::Ask => "ask",
+        Decision::Deny => "deny",
     }
 }
 
@@ -262,7 +502,6 @@ mod tests {
     use std::path::Path;
 
     fn demo_dir() -> PathBuf {
-        // test binary lives in target/debug/deps; the demo servers sit in target/debug
         let exe = std::env::current_exe().expect("test exe path");
         exe.parent()
             .and_then(Path::parent)
@@ -290,10 +529,13 @@ mod tests {
         ensure_demo_binaries(&dir);
         let root = std::env::temp_dir().join("bionichat-tests");
         std::fs::create_dir_all(&root).unwrap();
-        let registry = root.join(format!("registry-{label}.json"));
-        let specs = registry::default_specs(&dir, &root);
-        registry::save(&registry, &specs).expect("write test registry");
-        Hub::new(registry, 0)
+        let path = root.join(format!("registry-{label}.json"));
+        let registry = Registry {
+            servers: registry::default_specs(&dir, &root),
+            ..Default::default()
+        };
+        registry::save(&path, &registry).expect("write test registry");
+        Hub::new(path, 0, None)
     }
 
     #[tokio::test]
@@ -311,12 +553,21 @@ mod tests {
             .iter()
             .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_string))
             .collect();
-        assert_eq!(names, vec!["demo-ping__ping", "demo-ping__echo", "demo-fs__fs.read"]);
+        assert_eq!(
+            names,
+            vec!["demo-ping__ping", "demo-ping__echo", "demo-fs__fs.read"]
+        );
     }
 
     #[tokio::test]
-    async fn tools_call_ping_returns_pong_through_the_hub() {
-        let hub = test_hub("call");
+    async fn allow_path_calls_a_read_only_tool() {
+        let hub = test_hub("allow");
+        // Real clients always list tools before calling one: that list is what
+        // tells the policy the tool is read-only.
+        let (_, list) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}))
+            .await;
+        assert!(list.expect("list body").get("error").is_none());
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
@@ -326,8 +577,118 @@ mod tests {
         let body = body.expect("body");
         assert!(body.get("error").is_none(), "unexpected error: {body}");
         assert_eq!(
-            body.pointer("/result/content/0/text").and_then(Value::as_str),
+            body.pointer("/result/content/0/text")
+                .and_then(Value::as_str),
             Some("pong")
+        );
+    }
+
+    #[tokio::test]
+    async fn denied_tool_returns_32001_without_starting_the_server() {
+        let hub = test_hub("deny");
+        let mut registry = hub.registry();
+        registry.set_policy("demo-ping", "echo", Decision::Deny);
+        registry::save(&hub.registry_path, &registry).unwrap();
+
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":3,"method":"tools/call",
+                "params":{"name":"demo-ping__echo","arguments":{"text":"should not run"}}
+            }))
+            .await;
+        assert_eq!(
+            body.expect("body").pointer("/error/code"),
+            Some(&json!(-32001))
+        );
+        assert_eq!(hub.session_count(), 0, "denied call must not spawn a server");
+    }
+
+    #[tokio::test]
+    async fn ask_without_an_answer_times_out_with_32002() {
+        let hub = test_hub("ask").with_timeout(Duration::from_millis(150));
+        let mut registry = hub.registry();
+        registry.set_policy("demo-ping", "ping", Decision::Ask);
+        registry::save(&hub.registry_path, &registry).unwrap();
+
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":4,"method":"tools/call",
+                "params":{"name":"demo-ping__ping","arguments":{}}
+            }))
+            .await;
+        assert_eq!(
+            body.expect("body").pointer("/error/code"),
+            Some(&json!(-32002))
+        );
+    }
+
+    #[tokio::test]
+    async fn answered_prompt_runs_the_tool() {
+        let hub = test_hub("approve").with_timeout(Duration::from_secs(5));
+        let mut registry = hub.registry();
+        registry.set_policy("demo-ping", "ping", Decision::Ask);
+        registry::save(&hub.registry_path, &registry).unwrap();
+
+        let task = {
+            let hub = hub.clone();
+            tokio::spawn(async move {
+                hub.handle_rpc(json!({
+                    "jsonrpc":"2.0","id":5,"method":"tools/call",
+                    "params":{"name":"demo-ping__ping","arguments":{}}
+                }))
+                .await
+            })
+        };
+
+        // wait for the prompt to register, then approve it
+        let id = loop {
+            if let Some(view) = hub.pending().first() {
+                break view.id;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(hub.resolve(id, true));
+
+        let (_, body) = task.await.expect("task");
+        let body = body.expect("body");
+        assert!(body.get("error").is_none(), "unexpected error: {body}");
+        assert_eq!(
+            body.pointer("/result/content/0/text")
+                .and_then(Value::as_str),
+            Some("pong")
+        );
+    }
+
+    #[tokio::test]
+    async fn denied_prompt_returns_32001() {
+        let hub = test_hub("prompt-deny").with_timeout(Duration::from_secs(5));
+        let mut registry = hub.registry();
+        registry.set_policy("demo-ping", "ping", Decision::Ask);
+        registry::save(&hub.registry_path, &registry).unwrap();
+
+        let task = {
+            let hub = hub.clone();
+            tokio::spawn(async move {
+                hub.handle_rpc(json!({
+                    "jsonrpc":"2.0","id":6,"method":"tools/call",
+                    "params":{"name":"demo-ping__ping","arguments":{}}
+                }))
+                .await
+            })
+        };
+
+        let id = loop {
+            if let Some(view) = hub.pending().first() {
+                break view.id;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(hub.resolve(id, false));
+
+        let (_, body) = task.await.expect("task");
+        assert_eq!(
+            body.expect("body").pointer("/error/code"),
+            Some(&json!(-32001))
         );
     }
 
@@ -335,9 +696,12 @@ mod tests {
     async fn unknown_method_returns_32601() {
         let hub = test_hub("unknown");
         let (_, body) = hub
-            .handle_rpc(json!({"jsonrpc":"2.0","id":3,"method":"resources/list"}))
+            .handle_rpc(json!({"jsonrpc":"2.0","id":7,"method":"resources/list"}))
             .await;
-        assert_eq!(body.expect("body").pointer("/error/code"), Some(&json!(-32601)));
+        assert_eq!(
+            body.expect("body").pointer("/error/code"),
+            Some(&json!(-32601))
+        );
     }
 
     #[tokio::test]
@@ -355,10 +719,13 @@ mod tests {
         let hub = test_hub("badtool");
         let (_, body) = hub
             .handle_rpc(json!({
-                "jsonrpc":"2.0","id":4,"method":"tools/call",
+                "jsonrpc":"2.0","id":8,"method":"tools/call",
                 "params":{"name":"nope__missing","arguments":{}}
             }))
             .await;
-        assert_eq!(body.expect("body").pointer("/error/code"), Some(&json!(-32602)));
+        assert_eq!(
+            body.expect("body").pointer("/error/code"),
+            Some(&json!(-32602))
+        );
     }
 }

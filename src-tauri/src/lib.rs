@@ -1,24 +1,27 @@
-//! bionichat shell: dashboard over an MCP registry, plus the local hub that
-//! aggregates every registered server behind one StreamableHTTP endpoint.
+//! bionichat shell: dashboard over an MCP registry, the local hub that
+//! aggregates every registered server, approval policy, and supervision.
 
 mod hub;
 mod mcp;
+mod policy;
 mod registry;
 mod tunnel;
 
 use std::{
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::{
-    hub::{DEFAULT_PORT, Hub},
+    hub::{DEFAULT_PORT, Hub, PendingView},
     mcp::ToolInfo,
-    registry::ServerSpec,
+    registry::{Decision, Registry, ServerSpec},
     tunnel::{TunnelInfo, TunnelManager},
 };
 
@@ -31,6 +34,9 @@ const RENDERER: &str = "cef";
 #[cfg(not(feature = "cef"))]
 const RENDERER: &str = "wry (system webview)";
 
+const SUPERVISE_INTERVAL: Duration = Duration::from_secs(2);
+const MAX_RESTART_ATTEMPTS: u32 = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum Status {
@@ -40,13 +46,33 @@ enum Status {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct ToolRow {
+    name: String,
+    description: Option<String>,
+    read_only: bool,
+    policy: Decision,
+}
+
+impl ToolRow {
+    fn from_info(info: ToolInfo, decision: Decision) -> Self {
+        Self {
+            name: info.name,
+            description: info.description,
+            read_only: info.read_only,
+            policy: decision,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct ServerRow {
     name: String,
     transport: String,
     secret_keys: Vec<String>,
+    autorestart: bool,
     status: Status,
     error: Option<String>,
-    tools: Vec<ToolInfo>,
+    tools: Vec<ToolRow>,
 }
 
 impl ServerRow {
@@ -55,6 +81,7 @@ impl ServerRow {
             name: spec.name.clone(),
             transport: spec.transport.label(),
             secret_keys: spec.transport.secret_keys(),
+            autorestart: spec.autorestart,
             status: Status::Pending,
             error: None,
             tools: Vec::new(),
@@ -75,30 +102,35 @@ struct Dashboard {
     servers: Vec<ServerRow>,
     hub: HubRow,
     tunnel: TunnelInfo,
+    approvals: Vec<PendingView>,
     approvals_default: &'static str,
     renderer: &'static str,
     registry_path: String,
-}
-
-struct RegistryState {
-    specs: Vec<ServerSpec>,
-    rows: Vec<ServerRow>,
 }
 
 struct AppState {
     registry_path: PathBuf,
     hub: Arc<Hub>,
     tunnel: TunnelManager,
-    inner: Mutex<RegistryState>,
+    rows: Mutex<Vec<ServerRow>>,
+    retries: Mutex<HashMap<String, u32>>,
+}
+
+fn lock_rows(rows: &Mutex<Vec<ServerRow>>) -> std::sync::MutexGuard<'_, Vec<ServerRow>> {
+    rows.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn lock_retries(
+    retries: &Mutex<HashMap<String, u32>>,
+) -> std::sync::MutexGuard<'_, HashMap<String, u32>> {
+    retries
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn dashboard_of(state: &AppState) -> Dashboard {
-    let guard = match state.inner.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
     Dashboard {
-        servers: guard.rows.clone(),
+        servers: lock_rows(&state.rows).clone(),
         hub: HubRow {
             url: state.hub.url(),
             port: state.hub.port(),
@@ -106,28 +138,34 @@ fn dashboard_of(state: &AppState) -> Dashboard {
             note: "JSON-RPC over POST, no SSE",
         },
         tunnel: state.tunnel.info(),
-        approvals_default: "ask",
+        approvals: state.hub.pending(),
+        approvals_default: "read-only allow · everything else ask",
         renderer: RENDERER,
         registry_path: state.registry_path.display().to_string(),
     }
 }
 
-/// Probe every registered server through the hub's persistent sessions.
+/// Probe every registered server through the hub's persistent sessions and
+/// attach the effective policy to each tool.
 async fn probe_all(state: &AppState) -> Vec<ServerRow> {
-    let specs = {
-        let guard = match state.inner.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        guard.specs.clone()
-    };
-
-    let mut rows = Vec::with_capacity(specs.len());
-    for spec in specs {
-        let mut row = ServerRow::pending(&spec);
-        match state.hub.tools_for(&spec).await {
+    let registry = state.hub.registry();
+    let mut rows = Vec::with_capacity(registry.servers.len());
+    for spec in &registry.servers {
+        let mut row = ServerRow::pending(spec);
+        match state.hub.tools_for(spec).await {
             Ok(tools) => {
-                row.tools = tools;
+                row.tools = tools
+                    .into_iter()
+                    .map(|tool| {
+                        let decision = policy::decision(
+                            &registry.policies,
+                            &spec.name,
+                            &tool.name,
+                            tool.read_only,
+                        );
+                        ToolRow::from_info(tool, decision)
+                    })
+                    .collect();
                 row.status = Status::Ready;
             }
             Err(error) => {
@@ -140,12 +178,12 @@ async fn probe_all(state: &AppState) -> Vec<ServerRow> {
     rows
 }
 
-fn store_rows(state: &AppState, rows: &[ServerRow]) {
-    let mut guard = match state.inner.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    guard.rows = rows.to_vec();
+fn store_rows(state: &AppState, rows: Vec<ServerRow>) {
+    *lock_rows(&state.rows) = rows;
+}
+
+fn find_row<'a>(rows: &'a mut [ServerRow], name: &str) -> Option<&'a mut ServerRow> {
+    rows.iter_mut().find(|row| row.name == name)
 }
 
 #[tauri::command]
@@ -156,26 +194,125 @@ fn dashboard(state: State<'_, AppState>) -> Dashboard {
 #[tauri::command]
 async fn refresh(state: State<'_, AppState>) -> Result<Vec<ServerRow>, String> {
     let rows = probe_all(&state).await;
-    store_rows(&state, &rows);
+    store_rows(&state, rows.clone());
     Ok(rows)
 }
 
 #[tauri::command]
 async fn add_servers(json: String, state: State<'_, AppState>) -> Result<Vec<ServerRow>, String> {
     let incoming = registry::parse_anthropic(&json)?;
-    {
-        let mut guard = state
-            .inner
-            .lock()
-            .map_err(|_| "registry state is poisoned".to_string())?;
-        for spec in &incoming {
-            guard.specs.retain(|existing| existing.name != spec.name);
-            guard.specs.push(spec.clone());
-        }
-        registry::save(&state.registry_path, &guard.specs)?;
+    let mut registry = state.hub.registry();
+    for spec in incoming {
+        state.hub.release(&spec.name);
+        registry.servers.retain(|existing| existing.name != spec.name);
+        registry.servers.push(spec);
     }
+    registry::save(&state.registry_path, &registry)?;
     let rows = probe_all(&state).await;
-    store_rows(&state, &rows);
+    store_rows(&state, rows.clone());
+    Ok(rows)
+}
+
+#[tauri::command]
+fn set_policy(
+    server: String,
+    tool: String,
+    decision: Decision,
+    state: State<'_, AppState>,
+) -> Result<Vec<ServerRow>, String> {
+    let mut registry = state.hub.registry();
+    registry.set_policy(&server, &tool, decision);
+    registry::save(&state.registry_path, &registry)?;
+    let mut rows = lock_rows(&state.rows);
+    if let Some(row) = find_row(&mut rows, &server) {
+        if let Some(tool_row) = row.tools.iter_mut().find(|candidate| candidate.name == tool) {
+            tool_row.policy = decision;
+        }
+    }
+    Ok(rows.clone())
+}
+
+#[tauri::command]
+fn set_autorestart(
+    server: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<Vec<ServerRow>, String> {
+    let mut registry = state.hub.registry();
+    let Some(spec) = registry.server_mut(&server) else {
+        return Err(format!("no registered server `{server}`"));
+    };
+    spec.autorestart = enabled;
+    if enabled {
+        state.hub.release(&server);
+    }
+    registry::save(&state.registry_path, &registry)?;
+    let mut rows = lock_rows(&state.rows);
+    if let Some(row) = find_row(&mut rows, &server) {
+        row.autorestart = enabled;
+    }
+    Ok(rows.clone())
+}
+
+#[tauri::command]
+fn approvals(state: State<'_, AppState>) -> Vec<PendingView> {
+    state.hub.pending()
+}
+
+#[tauri::command]
+fn resolve_approval(id: u64, approve: bool, state: State<'_, AppState>) -> bool {
+    state.hub.resolve(id, approve)
+}
+
+#[tauri::command]
+async fn restart_server(
+    app: AppHandle,
+    server: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ServerRow>, String> {
+    state.hub.release(&server);
+    state.hub.forget(&server);
+    lock_retries(&state.retries).remove(&server);
+
+    let registry = state.hub.registry();
+    let spec = registry
+        .server(&server)
+        .cloned()
+        .ok_or_else(|| format!("no registered server `{server}`"))?;
+
+    let row = match state.hub.tools_for(&spec).await {
+        Ok(tools) => ServerRow {
+            tools: tools
+                .into_iter()
+                .map(|tool| {
+                    let decision = policy::decision(
+                        &registry.policies,
+                        &server,
+                        &tool.name,
+                        tool.read_only,
+                    );
+                    ToolRow::from_info(tool, decision)
+                })
+                .collect(),
+            status: Status::Ready,
+            ..ServerRow::pending(&spec)
+        },
+        Err(error) => ServerRow {
+            status: Status::Error,
+            error: Some(error),
+            ..ServerRow::pending(&spec)
+        },
+    };
+
+    let rows = {
+        let mut rows = lock_rows(&state.rows);
+        match find_row(&mut rows, &server) {
+            Some(existing) => *existing = row,
+            None => rows.push(row),
+        }
+        rows.clone()
+    };
+    let _ = app.emit("servers-updated", rows.clone());
     Ok(rows)
 }
 
@@ -199,8 +336,100 @@ fn refresh_in_background(app: &AppHandle) {
     tauri::async_runtime::spawn(async move {
         let state = handle.state::<AppState>();
         let rows = probe_all(&state).await;
-        store_rows(&state, &rows);
+        store_rows(&state, rows.clone());
         let _ = handle.emit("servers-updated", rows);
+    });
+}
+
+/// Detect externally killed servers within one interval, then restart them
+/// when the server asked for it (1 s, 2 s, 4 s backoff, three attempts).
+fn spawn_supervisor(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(SUPERVISE_INTERVAL).await;
+            let state = app.state::<AppState>();
+            let registry = state.hub.registry();
+
+            for spec in &registry.servers {
+                if state.hub.session_closed(&spec.name).await != Some(true) {
+                    continue;
+                }
+                state.hub.forget(&spec.name);
+
+                let attempts = lock_retries(&state.retries)
+                    .get(&spec.name)
+                    .copied()
+                    .unwrap_or(0);
+
+                if !spec.autorestart || attempts >= MAX_RESTART_ATTEMPTS {
+                    if !spec.autorestart {
+                        state.hub.hold(&spec.name);
+                    }
+                    let message = if spec.autorestart {
+                        format!("exited; gave up after {MAX_RESTART_ATTEMPTS} restart attempts")
+                    } else {
+                        "exited or was killed (restart button, or enable auto-restart)".to_string()
+                    };
+                    {
+                        let mut rows = lock_rows(&state.rows);
+                        if let Some(row) = find_row(&mut rows, &spec.name) {
+                            row.status = Status::Error;
+                            row.error = Some(message.clone());
+                            row.tools.clear();
+                        }
+                    }
+                    let _ = app.emit("servers-updated", lock_rows(&state.rows).clone());
+                    continue;
+                }
+
+                let next_attempt = attempts + 1;
+                lock_retries(&state.retries).insert(spec.name.clone(), next_attempt);
+
+                {
+                    let mut rows = lock_rows(&state.rows);
+                    if let Some(row) = find_row(&mut rows, &spec.name) {
+                        row.status = Status::Error;
+                        row.error = Some(format!(
+                            "exited; restarting ({next_attempt}/{MAX_RESTART_ATTEMPTS})"
+                        ));
+                    }
+                }
+                let _ = app.emit("servers-updated", lock_rows(&state.rows).clone());
+
+                tokio::time::sleep(Duration::from_secs(1u64 << attempts)).await;
+
+                match state.hub.tools_for(spec).await {
+                    Ok(tools) => {
+                        lock_retries(&state.retries).remove(&spec.name);
+                        let mut rows = lock_rows(&state.rows);
+                        if let Some(row) = find_row(&mut rows, &spec.name) {
+                            row.tools = tools
+                                .into_iter()
+                                .map(|tool| {
+                                    let decision = policy::decision(
+                                        &registry.policies,
+                                        &spec.name,
+                                        &tool.name,
+                                        tool.read_only,
+                                    );
+                                    ToolRow::from_info(tool, decision)
+                                })
+                                .collect();
+                            row.status = Status::Ready;
+                            row.error = None;
+                        }
+                    }
+                    Err(error) => {
+                        let mut rows = lock_rows(&state.rows);
+                        if let Some(row) = find_row(&mut rows, &spec.name) {
+                            row.status = Status::Error;
+                            row.error = Some(format!("restart failed: {error}"));
+                        }
+                    }
+                }
+                let _ = app.emit("servers-updated", lock_rows(&state.rows).clone());
+            }
+        }
     });
 }
 
@@ -236,29 +465,37 @@ pub fn run() {
                 .and_then(|exe| exe.parent().map(Path::to_path_buf))
                 .ok_or("cannot locate the binary directory")?;
 
-            let specs = registry::load(&registry_path).unwrap_or_else(|| {
-                let specs = registry::default_specs(&exe_dir, &demo_root);
-                if let Err(error) = registry::save(&registry_path, &specs) {
+            let registry = registry::load(&registry_path).unwrap_or_else(|| {
+                let registry = Registry {
+                    servers: registry::default_specs(&exe_dir, &demo_root),
+                    ..Default::default()
+                };
+                if let Err(error) = registry::save(&registry_path, &registry) {
                     log::warn!("could not seed the registry: {error}");
                 }
-                specs
+                registry
             });
 
             let port = std::env::var("BIONICHAT_HUB_PORT")
                 .ok()
                 .and_then(|value| value.parse().ok())
                 .unwrap_or(DEFAULT_PORT);
-            let hub = Hub::new(registry_path.clone(), port);
+            let hub = Hub::new(registry_path.clone(), port, Some(app.handle().clone()));
 
             let tunnel = TunnelManager::new();
             tunnel.hydrate();
 
-            let rows = specs.iter().map(ServerRow::pending).collect();
+            let rows = registry
+                .servers
+                .iter()
+                .map(ServerRow::pending)
+                .collect::<Vec<_>>();
             app.manage(AppState {
                 registry_path,
                 hub: hub.clone(),
                 tunnel,
-                inner: Mutex::new(RegistryState { specs, rows }),
+                rows: Mutex::new(rows),
+                retries: Mutex::new(HashMap::new()),
             });
 
             let hub_task = hub.clone();
@@ -270,12 +507,18 @@ pub fn run() {
             });
 
             refresh_in_background(app.handle());
+            spawn_supervisor(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             dashboard,
             refresh,
             add_servers,
+            set_policy,
+            set_autorestart,
+            approvals,
+            resolve_approval,
+            restart_server,
             tunnel_start,
             tunnel_stop
         ])

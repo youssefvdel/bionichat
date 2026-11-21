@@ -2,20 +2,30 @@
 // No framework, no npm deps — bun compiles this to dist/main.js.
 
 type Status = "pending" | "ready" | "error";
+type Decision = "allow" | "ask" | "deny";
 
 interface ToolInfo {
   name: string;
   description: string | null;
   read_only: boolean;
+  policy: Decision;
 }
 
 interface ServerRow {
   name: string;
   transport: string;
   secret_keys: string[];
+  autorestart: boolean;
   status: Status;
   error: string | null;
   tools: ToolInfo[];
+}
+
+interface Pending {
+  id: number;
+  server: string;
+  tool: string;
+  arguments: Record<string, unknown> | null;
 }
 
 interface TunnelInfo {
@@ -35,6 +45,7 @@ interface Dashboard {
   servers: ServerRow[];
   hub: HubRow;
   tunnel: TunnelInfo;
+  approvals: Pending[];
   approvals_default: string;
   renderer: string;
   registry_path: string;
@@ -83,6 +94,9 @@ const refs = {
   servers: qs<HTMLUListElement>("#servers"),
   serversEmpty: qs<HTMLParagraphElement>("#servers-empty"),
   approvals: qs<HTMLElement>("#approvals"),
+  approvalsCard: qs<HTMLElement>("#approvals-card"),
+  approvalsList: qs<HTMLUListElement>("#approvals-list"),
+  approvalsCount: qs<HTMLSpanElement>("#approvals-count"),
   addJson: qs<HTMLTextAreaElement>("#add-json"),
   addSubmit: qs<HTMLButtonElement>("#add-submit"),
   addFile: qs<HTMLInputElement>("#add-file"),
@@ -106,6 +120,26 @@ function statusPill(status: Status): HTMLSpanElement {
   return el("span", `pill pill-${status}`, label);
 }
 
+const POLICY_LABELS: Array<[Decision, string]> = [
+  ["allow", "Allow"],
+  ["ask", "Ask"],
+  ["deny", "Deny"],
+];
+
+function policySelect(row: ServerRow, tool: ToolInfo): HTMLSelectElement {
+  const select = el("select", "policy");
+  select.dataset.server = row.name;
+  select.dataset.tool = tool.name;
+  select.title = `Policy for ${row.name} / ${tool.name}`;
+  for (const [value, label] of POLICY_LABELS) {
+    const option = el("option", undefined, label);
+    option.value = value;
+    option.selected = tool.policy === value;
+    select.append(option);
+  }
+  return select;
+}
+
 function serverNode(row: ServerRow): HTMLLIElement {
   const item = el("li", "server");
 
@@ -120,6 +154,22 @@ function serverNode(row: ServerRow): HTMLLIElement {
   }
 
   head.append(statusPill(row.status));
+
+  const restart = el("button", "btn btn-ghost btn-small", "Restart");
+  restart.type = "button";
+  restart.dataset.action = "restart";
+  restart.dataset.server = row.name;
+  head.append(restart);
+
+  const autoLabel = el("label", "toggle");
+  const auto = el("input") as HTMLInputElement;
+  auto.type = "checkbox";
+  auto.checked = row.autorestart;
+  auto.dataset.action = "autorestart";
+  auto.dataset.server = row.name;
+  autoLabel.append(auto, el("span", "muted small", "auto-restart"));
+  head.append(autoLabel);
+
   item.append(head);
 
   if (row.error) {
@@ -142,6 +192,7 @@ function serverNode(row: ServerRow): HTMLLIElement {
       li.append(el("span", "tool-name", tool.name));
       if (tool.read_only) li.append(el("span", "secret", "read-only"));
       if (tool.description) li.append(el("span", "tool-desc", tool.description));
+      li.append(policySelect(row, tool));
       list.append(li);
     }
     details.append(list);
@@ -149,6 +200,36 @@ function serverNode(row: ServerRow): HTMLLIElement {
   }
 
   return item;
+}
+
+function pendingNode(pending: Pending): HTMLLIElement {
+  const item = el("li", "approval");
+  const head = el("div", "server-head");
+  head.append(el("span", "server-name", `${pending.server} / ${pending.tool}`));
+  item.append(head);
+
+  const args = pending.arguments ? JSON.stringify(pending.arguments) : "{}";
+  const preview = args.length > 160 ? `${args.slice(0, 157)}…` : args;
+  item.append(el("code", "url", preview));
+
+  const row = el("div", "row");
+  const approve = el("button", "btn btn-primary btn-small", "Approve");
+  approve.type = "button";
+  approve.dataset.action = "approve";
+  approve.dataset.id = String(pending.id);
+  const deny = el("button", "btn btn-small", "Deny");
+  deny.type = "button";
+  deny.dataset.action = "deny";
+  deny.dataset.id = String(pending.id);
+  row.append(approve, deny);
+  item.append(row);
+  return item;
+}
+
+function renderApprovals(list: Pending[]): void {
+  refs.approvalsCard.hidden = list.length === 0;
+  refs.approvalsCount.textContent = String(list.length);
+  refs.approvalsList.replaceChildren(...list.map(pendingNode));
 }
 
 function render(rows: ServerRow[]): void {
@@ -166,6 +247,7 @@ function renderDashboard(data: Dashboard): void {
   refs.hubSessions.textContent = `${data.hub.sessions} session${data.hub.sessions === 1 ? "" : "s"}`;
   refs.hubNote.textContent = data.hub.note;
   renderTunnel(data.tunnel);
+  renderApprovals(data.approvals);
   render(data.servers);
 }
 
@@ -279,6 +361,62 @@ async function tunnelStop(): Promise<void> {
   renderTunnel(await bridge.core.invoke<TunnelInfo>("tunnel_stop"));
 }
 
+async function setPolicy(select: HTMLSelectElement): Promise<void> {
+  if (!bridge) return;
+  const server = select.dataset.server ?? "";
+  const tool = select.dataset.tool ?? "";
+  const decision = select.value as Decision;
+  select.disabled = true;
+  try {
+    render(await bridge.core.invoke<ServerRow[]>("set_policy", { server, tool, decision }));
+  } catch (error) {
+    showAddError(`policy failed: ${String(error)}`);
+  } finally {
+    select.disabled = false;
+  }
+}
+
+async function setAutorestart(input: HTMLInputElement): Promise<void> {
+  if (!bridge) return;
+  const server = input.dataset.server ?? "";
+  input.disabled = true;
+  try {
+    render(await bridge.core.invoke<ServerRow[]>("set_autorestart", { server, enabled: input.checked }));
+  } catch (error) {
+    input.checked = !input.checked;
+    showAddError(`auto-restart failed: ${String(error)}`);
+  } finally {
+    input.disabled = false;
+  }
+}
+
+async function restartServer(button: HTMLButtonElement): Promise<void> {
+  if (!bridge) return;
+  const server = button.dataset.server ?? "";
+  button.disabled = true;
+  button.textContent = "Restarting…";
+  try {
+    render(await bridge.core.invoke<ServerRow[]>("restart_server", { server }));
+  } catch (error) {
+    showAddError(`restart failed: ${String(error)}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Restart";
+  }
+}
+
+async function resolveApproval(button: HTMLButtonElement, approve: boolean): Promise<void> {
+  if (!bridge) return;
+  const id = Number(button.dataset.id ?? 0);
+  button.disabled = true;
+  try {
+    await bridge.core.invoke<boolean>("resolve_approval", { id, approve });
+    renderApprovals(await bridge.core.invoke<Pending[]>("approvals"));
+  } catch (error) {
+    showAddError(`approval failed: ${String(error)}`);
+  }
+}
+
 refs.refresh.addEventListener("click", () => void refresh());
 refs.tunnelStart.addEventListener("click", () => void tunnelStart());
 refs.tunnelStop.addEventListener("click", () => void tunnelStop());
@@ -287,6 +425,28 @@ refs.tunnelCopy.addEventListener("click", () =>
   void copy(refs.tunnelUrl.textContent ?? "", refs.tunnelCopy),
 );
 refs.addSubmit.addEventListener("click", () => void submit());
+
+refs.servers.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement | null;
+  const button = target?.closest<HTMLButtonElement>("button[data-action='restart']");
+  if (button) void restartServer(button);
+});
+
+refs.servers.addEventListener("change", (event) => {
+  const target = event.target as HTMLElement | null;
+  if (target instanceof HTMLSelectElement && target.classList.contains("policy")) {
+    void setPolicy(target);
+  } else if (target instanceof HTMLInputElement && target.dataset.action === "autorestart") {
+    void setAutorestart(target);
+  }
+});
+
+refs.approvalsList.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLButtonElement)) return;
+  if (target.dataset.action === "approve") void resolveApproval(target, true);
+  if (target.dataset.action === "deny") void resolveApproval(target, false);
+});
 
 refs.addFile.addEventListener("change", () => {
   const file = refs.addFile.files?.[0];
@@ -305,6 +465,18 @@ if (bridge) {
   void bridge.event.listen<TunnelInfo>("tunnel-updated", (event) =>
     renderTunnel(event.payload),
   );
+  void bridge.event.listen<Pending>("approval-requested", () => void refreshApprovals());
+  // Prompts also expire (60s) without any event reaching us.
+  window.setInterval(() => void refreshApprovals(), 5000);
+}
+
+async function refreshApprovals(): Promise<void> {
+  if (!bridge) return;
+  try {
+    renderApprovals(await bridge.core.invoke<Pending[]>("approvals"));
+  } catch {
+    // the banner is best-effort; the next tick retries
+  }
 }
 
 void load();

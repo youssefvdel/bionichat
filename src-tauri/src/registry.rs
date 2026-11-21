@@ -45,31 +45,72 @@ impl Transport {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Decision {
+    Allow,
+    Ask,
+    Deny,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerSpec {
     pub name: String,
+    /// Restart the crashed server automatically (max 3 backoff attempts).
+    #[serde(default)]
+    pub autorestart: bool,
     #[serde(flatten)]
     pub transport: Transport,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct RegistryFile {
-    version: u32,
-    servers: Vec<ServerSpec>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Registry {
+    #[serde(default = "one")]
+    pub version: u32,
+    #[serde(default)]
+    pub servers: Vec<ServerSpec>,
+    /// `server__tool` -> decision. Absent keys fall back to the defaults in
+    /// `policy::decision` (read-only tools allow, everything else ask).
+    #[serde(default)]
+    pub policies: BTreeMap<String, Decision>,
 }
 
-pub fn load(path: &Path) -> Option<Vec<ServerSpec>> {
+fn one() -> u32 {
+    1
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            servers: Vec::new(),
+            policies: BTreeMap::new(),
+        }
+    }
+}
+
+impl Registry {
+    pub fn set_policy(&mut self, server: &str, tool: &str, decision: Decision) {
+        self.policies
+            .insert(format!("{server}__{tool}"), decision);
+    }
+
+    pub fn server(&self, name: &str) -> Option<&ServerSpec> {
+        self.servers.iter().find(|spec| spec.name == name)
+    }
+
+    pub fn server_mut(&mut self, name: &str) -> Option<&mut ServerSpec> {
+        self.servers.iter_mut().find(|spec| spec.name == name)
+    }
+}
+
+pub fn load(path: &Path) -> Option<Registry> {
     let text = fs::read_to_string(path).ok()?;
-    let file: RegistryFile = serde_json::from_str(&text).ok()?;
-    Some(file.servers)
+    serde_json::from_str(&text).ok()
 }
 
-pub fn save(path: &Path, servers: &[ServerSpec]) -> Result<(), String> {
-    let file = RegistryFile {
-        version: 1,
-        servers: servers.to_vec(),
-    };
-    let text = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
+pub fn save(path: &Path, registry: &Registry) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(registry).map_err(|e| e.to_string())?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -81,6 +122,7 @@ pub fn default_specs(exe_dir: &Path, demo_root: &Path) -> Vec<ServerSpec> {
     vec![
         ServerSpec {
             name: "demo-ping".into(),
+            autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("demo-ping").display().to_string(),
                 args: vec![],
@@ -89,6 +131,7 @@ pub fn default_specs(exe_dir: &Path, demo_root: &Path) -> Vec<ServerSpec> {
         },
         ServerSpec {
             name: "demo-fs".into(),
+            autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("demo-fs").display().to_string(),
                 args: vec![demo_root.display().to_string()],
@@ -172,6 +215,7 @@ pub fn parse_anthropic(input: &str) -> Result<Vec<ServerSpec>, String> {
 
         specs.push(ServerSpec {
             name: name.to_string(),
+            autorestart: false,
             transport,
         });
     }

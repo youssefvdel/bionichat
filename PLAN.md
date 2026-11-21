@@ -52,7 +52,16 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
   (`~/.local/bin`), live proof 2026-11-20: public ZeroSSL-verified URL served
   tools/list + tools/call, Stop took the service down. Tunnel state is now
   hydrated from `opentunnel status` at launch.
-- P3 next: approvals (Allow/Ask/Deny), supervision/restart, external-kill detection.
+- P3 DONE 2026-11-21: approvals (Allow/Ask/Deny per tool, dashboard banner,
+  Approve/Deny buttons, 60s timeout → -32002, deny → -32001 before any spawn),
+  supervision (2s probe, auto-restart with 1/2/4s backoff, crash quarantined
+  when auto-restart is off so a lazy `tools/list` cannot resurrect it), restart
+  button. Live proof: ask→banner→approve→pong; deny→-32001; kill with
+  auto-restart on→new PID; kill with it off→red row, stays dead, Restart revives.
+- Two bugs found and fixed in review: rmcp `is_closed()` never flips after a
+  child dies (supervisor now probes `tools/list` with a 5s timeout), and a cold
+  `tools/call` could not know a tool was read-only (hub now caches the
+  `tools/list` hints per server).
 
 ## Open
 - Name: bionichat locked and applied to crate, productName, identifier and window title 2026-11-20. Google sign-in (moves with chats phase).
