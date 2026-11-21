@@ -315,15 +315,19 @@ fn parse_status(text: &str) -> Option<TunnelInfo> {
 }
 
 /// `e9f7….opentunnel.xyz  →  127.0.0.1:8787` becomes the public URL.
-/// The route name `route remove` wants, from a public URL:
-/// `xxx.opentunnel.xyz[/...]` -> `xxx`.
+/// The route name `route remove` wants, from a public URL. The public host
+/// is `<route>.<tunnel-id>.opentunnel.xyz`; the name is the first label:
+/// `xxx.…​.opentunnel.xyz[/...]` -> `xxx`.
 pub fn route_name(url: &str) -> Option<String> {
-    let host = url
-        .trim()
-        .trim_start_matches("https://")
-        .split('/')
-        .next()?;
-    host.strip_suffix(".opentunnel.xyz").map(str::to_string)
+    let host = url.trim().trim_start_matches("https://").split('/').next()?;
+    if !host.ends_with(".opentunnel.xyz") {
+        return None;
+    }
+    let first = host.split('.').next()?;
+    if first.is_empty() || first.contains(' ') {
+        return None;
+    }
+    Some(first.to_string())
 }
 
 fn route_url(line: &str) -> Option<String> {
@@ -371,7 +375,7 @@ mod tests {
     fn route_name_strips_host_and_path() {
         assert_eq!(
             route_name("https://e9f7421df827e461.kfgepc72im6k.opentunnel.xyz/mcp"),
-            Some("e9f7421df827e461.kfgepc72im6k".to_string())
+            Some("e9f7421df827e461".to_string())
         );
         assert_eq!(route_name("https://demo-1234.opentunnel.xyz"), Some("demo-1234".to_string()));
         assert_eq!(route_name("not a url"), None);

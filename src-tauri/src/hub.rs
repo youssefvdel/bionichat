@@ -453,16 +453,15 @@ impl Hub {
         // Policy first: a denied call must not start a server or touch the disk.
         let read_only = self.read_only_cached(&server, &tool);
         match policy::decision(&registry.policies, &server, &tool, read_only) {
+            // Deny always wins, even over a session grant below.
             Decision::Deny => return Err((-32001, "denied by policy".to_string())),
-            // An explicit Deny above always wins. A session grant skips the
-            // prompt for this run only; nothing is written to disk.
+            // A session grant skips the prompt for this run only.
             Decision::Ask if !self.session_allowed(&server, &tool) => {
                 if !self.ask(&server, &tool, &arguments).await? {
                     return Err((-32001, "denied in the dashboard".to_string()));
                 }
             }
-            _ => {}
-            Decision::Allow => {}
+            Decision::Ask | Decision::Allow => {}
         }
 
         let client = self

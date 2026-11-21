@@ -377,9 +377,25 @@ async function tunnelStop(): Promise<void> {
   renderTunnel(await bridge.core.invoke<TunnelInfo>("tunnel_stop"));
 }
 
+// Native window.confirm does not fire inside the embedded browser, so the
+// button arms itself instead: first click arms, second click burns.
+let revokeArmed = false;
+let revokeTimer = 0;
 async function tunnelRevoke(): Promise<void> {
   if (!bridge) return;
-  if (!window.confirm("Burn this public URL for good? The next start mints a fresh one.")) return;
+  if (!revokeArmed) {
+    revokeArmed = true;
+    refs.tunnelRevoke.textContent = "Sure? Click again to burn";
+    window.clearTimeout(revokeTimer);
+    revokeTimer = window.setTimeout(() => {
+      revokeArmed = false;
+      refs.tunnelRevoke.textContent = "Revoke link";
+    }, 6000);
+    return;
+  }
+  window.clearTimeout(revokeTimer);
+  revokeArmed = false;
+  refs.tunnelRevoke.textContent = "Revoke link";
   renderTunnel(await bridge.core.invoke<TunnelInfo>("tunnel_revoke"));
 }
 
