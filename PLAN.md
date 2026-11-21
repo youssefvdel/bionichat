@@ -26,6 +26,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P5: Tauri approval gate (ask/session-allow/deny), link revoke with fresh URL on next start.
 - P6: live activity feed on the main page.
 - P7: data-terminal dark restyle; hub-spur logo concepts (A1 refined + power-b finalists).
+- P15: Projects = folders the user chooses via the in-app picker (browse + Use this folder), saved to projects.json; old ~/Projects listing removed.
 - P14: Projects means the user's ~/Projects folders; servers, tools, live map and tunnel move to Settings (pinned bottom); sidebar dimmed with logo footer.
 - P13: live tool map on Overview (React Flow): hub → projects → tools, `tool-start` event, animated path, live rail of running and recent calls.
 - P12: clay raised (no pressed wells), sidebar with Overview / Projects / Settings, setup moved to Settings, one primary action per screen.

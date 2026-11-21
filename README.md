@@ -77,8 +77,9 @@ dist/                     bun run build output
 Settings → Tools draws the hub, every server and every tool as a graph, and
 lights the path up while a call is in flight.
 
-Overview is the home page: approvals waiting on you, the tunnel's state, and a
-way into your projects. The public link itself is never printed there, only
+Projects is a picker, not a listing: you choose any folder on this machine and
+it becomes a project the chat will work in. Saved in
+`<data>/projects.json`; a folder that later disappears drops itself. The public link itself is never printed there, only
 inside Settings → Tunnel, where copying happens. Projects lists the folders in `~/Projects` (your own
 work, not MCP servers). Everything about the bridge — servers, tool policies,
 the live map, the tunnel — lives in Settings, pinned to the bottom of the

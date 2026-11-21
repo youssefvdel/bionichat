@@ -64,11 +64,18 @@ const fixtures = {
   approvals: [],
   activity: [],
   projects: [
-    { name: "web-agent", path: "/home/youssefvdel/Projects/web-agent", entries: 14 },
-    { name: "Arkrete", path: "/home/youssefvdel/Projects/Arkrete", entries: 32 },
-    { name: "9router", path: "/home/youssefvdel/Projects/9router", entries: 9 },
-    { name: "ADHD-Task-manager", path: "/home/youssefvdel/Projects/ADHD-Task-manager", entries: 21 },
+    { name: "web-agent", path: "/home/youssefvdel/Projects/web-agent" },
+    { name: "Arkrete", path: "/home/youssefvdel/Projects/Arkrete" },
   ],
+  browse: {
+    path: "/home/youssefvdel",
+    parent: "/home",
+    dirs: [
+      { name: "Projects", path: "/home/youssefvdel/Projects" },
+      { name: "Documents", path: "/home/youssefvdel/Documents" },
+      { name: "Downloads", path: "/home/youssefvdel/Downloads" },
+    ],
+  },
 };
 
 const html = `<!doctype html>

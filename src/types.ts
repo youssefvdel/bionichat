@@ -39,7 +39,17 @@ export interface ActivityEntry {
 export interface ProjectEntry {
   name: string;
   path: string;
-  entries: number;
+}
+
+export interface DirRow {
+  name: string;
+  path: string;
+}
+
+export interface BrowseView {
+  path: string;
+  parent: string | null;
+  dirs: DirRow[];
 }
 
 export interface CallStart {

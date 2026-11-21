@@ -115,6 +115,7 @@ struct Dashboard {
 
 struct AppState {
     registry_path: PathBuf,
+    projects_path: PathBuf,
     hub: Arc<Hub>,
     tunnel: TunnelManager,
     rows: Mutex<Vec<ServerRow>>,
@@ -192,46 +193,131 @@ fn find_row<'a>(rows: &'a mut [ServerRow], name: &str) -> Option<&'a mut ServerR
     rows.iter_mut().find(|row| row.name == name)
 }
 
-/// One folder under the user's Projects directory.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ProjectEntry {
+/// A folder the user chose to work in.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProjectRow {
     pub name: String,
     pub path: String,
-    pub entries: usize,
 }
 
-/// The user's own projects: plain folders, nothing to do with MCP servers.
-#[tauri::command]
-fn projects() -> Vec<ProjectEntry> {
-    let home = std::env::var("HOME")
+/// One sub-folder in the picker.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DirRow {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BrowseView {
+    pub path: String,
+    pub parent: Option<String>,
+    pub dirs: Vec<DirRow>,
+}
+
+fn home_dir() -> PathBuf {
+    std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_default();
-    let root = std::path::PathBuf::from(home).join("Projects");
-    let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&root) {
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/"))
+}
+
+fn load_projects(path: &Path) -> Vec<ProjectRow> {
+    let Ok(text) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    serde_json::from_str::<Vec<ProjectRow>>(&text).unwrap_or_default()
+}
+
+fn save_projects(path: &Path, rows: &[ProjectRow]) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(rows).map_err(|e| e.to_string())?;
+    fs::write(path, text).map_err(|e| format!("cannot save projects: {e}"))
+}
+
+/// Saved projects, dropping any folder that has since been moved or deleted.
+#[tauri::command]
+fn projects(state: State<'_, AppState>) -> Vec<ProjectRow> {
+    let mut rows = load_projects(&state.projects_path);
+    rows.retain(|row| Path::new(&row.path).is_dir());
+    rows
+}
+
+/// Add a working folder. The same folder twice is a no-op.
+#[tauri::command]
+fn add_project(path: String, state: State<'_, AppState>) -> Result<Vec<ProjectRow>, String> {
+    let given = PathBuf::from(path.trim());
+    let folder = given
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", given.display()))?;
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    let name = folder
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| folder.display().to_string());
+
+    let mut rows = load_projects(&state.projects_path);
+    let display = folder.display().to_string();
+    if !rows.iter().any(|row| row.path == display) {
+        rows.push(ProjectRow {
+            name,
+            path: display,
+        });
+        save_projects(&state.projects_path, &rows)?;
+    }
+    Ok(rows)
+}
+
+#[tauri::command]
+fn remove_project(path: String, state: State<'_, AppState>) -> Vec<ProjectRow> {
+    let mut rows = load_projects(&state.projects_path);
+    rows.retain(|row| row.path != path);
+    let _ = save_projects(&state.projects_path, &rows);
+    rows
+}
+
+/// List the sub-folders of `path` so the app can offer its own folder picker
+/// (no portal, no GTK dialog: it works the same under CEF and wry).
+#[tauri::command]
+fn browse(path: Option<String>) -> Result<BrowseView, String> {
+    let folder = match path.filter(|value| !value.trim().is_empty()) {
+        Some(value) => PathBuf::from(value),
+        None => home_dir(),
+    };
+    let folder = folder
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", folder.display()))?;
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+
+    let mut dirs = Vec::new();
+    if let Ok(entries) = fs::read_dir(&folder) {
         for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() {
+            let child = entry.path();
+            if !child.is_dir() {
                 continue;
             }
-            let name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default()
-                .to_string();
+            let name = entry.file_name().to_string_lossy().to_string();
             if name.starts_with('.') {
                 continue;
             }
-            let entries = std::fs::read_dir(&path).map(|dir| dir.count()).unwrap_or(0);
-            out.push(ProjectEntry {
+            dirs.push(DirRow {
                 name,
-                path: path.display().to_string(),
-                entries,
+                path: child.display().to_string(),
             });
         }
     }
-    out.sort_by_key(|p| p.name.to_lowercase());
-    out
+    dirs.sort_by_key(|dir| dir.name.to_lowercase());
+
+    Ok(BrowseView {
+        parent: folder
+            .parent()
+            .map(|parent| parent.display().to_string()),
+        path: folder.display().to_string(),
+        dirs,
+    })
 }
 
 #[tauri::command]
@@ -599,6 +685,7 @@ pub fn run() {
                 registry_path,
                 hub: hub.clone(),
                 tunnel,
+                projects_path: data_dir.join("projects.json"),
                 rows: Mutex::new(rows),
                 retries: Mutex::new(HashMap::new()),
             });
@@ -618,6 +705,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             dashboard,
             projects,
+            add_project,
+            remove_project,
+            browse,
             refresh,
             add_servers,
             set_policy,
