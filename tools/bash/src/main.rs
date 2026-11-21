@@ -66,7 +66,7 @@ impl ServerHandler for BashServer {
                     },
                     "workdir": {
                         "type": "string",
-                        "description": "Working directory (default: the server's own)"
+                        "description": "Working directory (default: your home directory)"
                     },
                     "timeout_ms": {
                         "type": "integer",
@@ -104,8 +104,18 @@ impl ServerHandler for BashServer {
             .clamp(1_000, MAX_TIMEOUT_MS);
         let mut child = tokio::process::Command::new("sh");
         child.arg("-c").arg(command);
-        if let Some(workdir) = arguments.get("workdir").and_then(Value::as_str) {
-            child.current_dir(workdir);
+        match arguments.get("workdir").and_then(Value::as_str) {
+            Some(workdir) => {
+                child.current_dir(workdir);
+            }
+            // No workdir given: run in the user's home, not the app folder.
+            None => {
+                if let Some(home) = std::env::var_os("HOME")
+                    .or_else(|| std::env::var_os("USERPROFILE"))
+                {
+                    child.current_dir(home);
+                }
+            }
         }
         let child = child
             .stdout(std::process::Stdio::piped())

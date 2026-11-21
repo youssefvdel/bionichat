@@ -982,6 +982,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn bash_defaults_to_home_directory() {
+        let hub = test_hub("home");
+        hub.registry_mut_allow("bash", "bash");
+        let (_, list) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}))
+            .await;
+        assert!(list.expect("list body").get("error").is_none());
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":2,"method":"tools/call",
+                "params":{"name":"bash","arguments":{"command":"pwd"}}
+            }))
+            .await;
+        let body = body.expect("call body");
+        assert!(body.get("error").is_none(), "unexpected error: {body}");
+        let home = std::env::var("HOME").expect("HOME set in tests");
+        assert!(
+            body.pointer("/result/content/0/text")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|report| report.contains(home.as_str())),
+            "bash must run in $HOME without a workdir: {body}"
+        );
+    }
+
+    #[tokio::test]
     async fn edit_roundtrip() {
         let hub = test_hub("edit");
 
