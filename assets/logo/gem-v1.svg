@@ -1,0 +1,12 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><title>Brand logo</title>
+<rect x="8" y="8" width="240" height="240" rx="58" fill="#000"/>
+<g fill="#fff">
+<!-- top-left corner: horizontal bar + vertical drop, chamfered outer ends -->
+<path d="M78,60 H172 L150,94 H100 V150 L78,172 Z"/>
+<!-- bottom-right corner: 180° twin -->
+<path d="M178,196 H84 L106,162 H156 V106 L178,84 Z"/>
+<!-- two diagonal slashes -->
+<path d="M196,44 L228,44 L108,164 L76,164 Z"/>
+<path d="M228,84 L228,116 L140,204 L108,204 Z"/>
+</g></svg>
