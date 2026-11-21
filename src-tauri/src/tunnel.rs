@@ -91,6 +91,36 @@ impl TunnelManager {
         info
     }
 
+    /// Burn the route and take the service down. The public URL dies for
+    /// good: the next start mints a fresh random route (new URL). Use this
+    /// when a link leaks — plain stop keeps the same URL for next time.
+    pub async fn revoke(&self) -> TunnelInfo {
+        if let (Some(binary), Some(name)) = (
+            locate_binary(),
+            self
+                .info()
+                .public_url
+                .as_ref()
+                .and_then(|url| route_name(url)),
+        ) {
+            let remove = Command::new(&binary)
+                .args(["route", "remove", name.as_str()])
+                .output();
+            match tokio::time::timeout(Duration::from_secs(10), remove).await {
+                Ok(Ok(output)) if output.status.success() => {}
+                Ok(Ok(output)) => eprintln!(
+                    "tunnel: opentunnel route remove failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ),
+                Ok(Err(error)) => {
+                    eprintln!("tunnel: cannot run opentunnel route remove: {error}")
+                }
+                Err(_) => eprintln!("tunnel: opentunnel route remove timed out"),
+            }
+        }
+        self.stop().await
+    }
+
     /// Kill the launcher child and take the background service down. The
     /// routes stay configured, so starting again reuses the same public URL.
     pub async fn stop(&self) -> TunnelInfo {
@@ -285,6 +315,17 @@ fn parse_status(text: &str) -> Option<TunnelInfo> {
 }
 
 /// `e9f7….opentunnel.xyz  →  127.0.0.1:8787` becomes the public URL.
+/// The route name `route remove` wants, from a public URL:
+/// `xxx.opentunnel.xyz[/...]` -> `xxx`.
+pub fn route_name(url: &str) -> Option<String> {
+    let host = url
+        .trim()
+        .trim_start_matches("https://")
+        .split('/')
+        .next()?;
+    host.strip_suffix(".opentunnel.xyz").map(str::to_string)
+}
+
 fn route_url(line: &str) -> Option<String> {
     let (left, _) = line.split_once('→')?;
     let host = left.trim();
@@ -324,6 +365,17 @@ mod tests {
             parse_public_url("route ready: https://demo-1234.opentunnel.dev/mcp"),
             Some("https://demo-1234.opentunnel.dev/mcp".to_string())
         );
+    }
+
+    #[test]
+    fn route_name_strips_host_and_path() {
+        assert_eq!(
+            route_name("https://e9f7421df827e461.kfgepc72im6k.opentunnel.xyz/mcp"),
+            Some("e9f7421df827e461.kfgepc72im6k".to_string())
+        );
+        assert_eq!(route_name("https://demo-1234.opentunnel.xyz"), Some("demo-1234".to_string()));
+        assert_eq!(route_name("not a url"), None);
+        assert_eq!(route_name("https://example.com/x"), None);
     }
 
     #[test]

@@ -269,6 +269,11 @@ fn resolve_approval(id: u64, approve: bool, state: State<'_, AppState>) -> bool 
 }
 
 #[tauri::command]
+fn resolve_session(id: u64, state: State<'_, AppState>) -> bool {
+    state.hub.resolve_session(id)
+}
+
+#[tauri::command]
 async fn restart_server(
     app: AppHandle,
     server: String,
@@ -330,6 +335,13 @@ async fn tunnel_start(app: AppHandle, state: State<'_, AppState>) -> Result<Tunn
 #[tauri::command]
 async fn tunnel_stop(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
     let info = state.tunnel.stop().await;
+    let _ = app.emit("tunnel-updated", info.clone());
+    Ok(info)
+}
+
+#[tauri::command]
+async fn tunnel_revoke(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
+    let info = state.tunnel.revoke().await;
     let _ = app.emit("tunnel-updated", info.clone());
     Ok(info)
 }
@@ -522,9 +534,11 @@ pub fn run() {
             set_autorestart,
             approvals,
             resolve_approval,
+            resolve_session,
             restart_server,
             tunnel_start,
-            tunnel_stop
+            tunnel_stop,
+            tunnel_revoke
         ])
         .run(tauri::generate_context!())
         .expect("error while running bionichat");

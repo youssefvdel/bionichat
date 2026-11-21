@@ -90,6 +90,7 @@ const refs = {
   tunnelCopy: qs<HTMLButtonElement>("#tunnel-copy"),
   tunnelStart: qs<HTMLButtonElement>("#tunnel-start"),
   tunnelStop: qs<HTMLButtonElement>("#tunnel-stop"),
+  tunnelRevoke: qs<HTMLButtonElement>("#tunnel-revoke"),
   tunnelError: qs<HTMLParagraphElement>("#tunnel-error"),
   serverCount: qs<HTMLSpanElement>("#server-count"),
   servers: qs<HTMLUListElement>("#servers"),
@@ -230,7 +231,12 @@ function pendingNode(pending: Pending): HTMLLIElement {
   deny.type = "button";
   deny.dataset.action = "deny";
   deny.dataset.id = String(pending.id);
-  row.append(approve, deny);
+  const session = el("button", "btn btn-small", "Until restart");
+  session.type = "button";
+  session.title = "Approve this tool until the app quits (nothing is saved)";
+  session.dataset.action = "session";
+  session.dataset.id = String(pending.id);
+  row.append(approve, session, deny);
   item.append(row);
   return item;
 }
@@ -322,6 +328,7 @@ function renderTunnel(info: TunnelInfo): void {
   refs.tunnelStart.disabled = busy || info.status === "ready";
   refs.tunnelStart.textContent = busy ? "Starting…" : "Start tunnel";
   refs.tunnelStop.disabled = !busy && info.status !== "ready";
+  refs.tunnelRevoke.disabled = !busy && info.status !== "ready";
   refs.tunnelError.textContent = info.error ?? "";
   refs.tunnelNote.textContent =
     info.status === "ready"
@@ -368,6 +375,24 @@ async function tunnelStart(): Promise<void> {
 async function tunnelStop(): Promise<void> {
   if (!bridge) return;
   renderTunnel(await bridge.core.invoke<TunnelInfo>("tunnel_stop"));
+}
+
+async function tunnelRevoke(): Promise<void> {
+  if (!bridge) return;
+  if (!window.confirm("Burn this public URL for good? The next start mints a fresh one.")) return;
+  renderTunnel(await bridge.core.invoke<TunnelInfo>("tunnel_revoke"));
+}
+
+async function resolveSession(button: HTMLButtonElement): Promise<void> {
+  if (!bridge) return;
+  const id = Number(button.dataset.id ?? 0);
+  button.disabled = true;
+  try {
+    await bridge.core.invoke<boolean>("resolve_session", { id });
+    renderApprovals(await bridge.core.invoke<Pending[]>("approvals"));
+  } catch (error) {
+    showAddError(`approval failed: ${String(error)}`);
+  }
 }
 
 async function setPolicy(select: HTMLSelectElement): Promise<void> {
@@ -429,6 +454,7 @@ async function resolveApproval(button: HTMLButtonElement, approve: boolean): Pro
 refs.refresh.addEventListener("click", () => void refresh());
 refs.tunnelStart.addEventListener("click", () => void tunnelStart());
 refs.tunnelStop.addEventListener("click", () => void tunnelStop());
+refs.tunnelRevoke.addEventListener("click", () => void tunnelRevoke());
 refs.hubCopy.addEventListener("click", () => void copy(refs.hubUrl.textContent ?? "", refs.hubCopy));
 refs.tunnelCopy.addEventListener("click", () =>
   void copy(refs.tunnelUrl.textContent ?? "", refs.tunnelCopy),
@@ -455,6 +481,7 @@ refs.approvalsList.addEventListener("click", (event) => {
   if (!(target instanceof HTMLButtonElement)) return;
   if (target.dataset.action === "approve") void resolveApproval(target, true);
   if (target.dataset.action === "deny") void resolveApproval(target, false);
+  if (target.dataset.action === "session") void resolveSession(target);
 });
 
 refs.addFile.addEventListener("change", () => {

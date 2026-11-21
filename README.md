@@ -6,7 +6,9 @@ MCP servers (`fs` with read/write/edit, `bash` with one shell tool), a
 local hub that aggregates them behind one MCP endpoint and forwards real
 input schemas, the OpenTunnel button, per-tool approval policy, and
 supervision. `read` is allowed by default; `write`, `edit` and
-`bash` ask for dashboard approval on every call. No chats yet.
+`bash` ask for dashboard approval on every call. Approving with **Until
+restart** remembers the grant in memory only — a restart re-arms every Ask.
+No chats yet.
 
 ## Run
 
@@ -72,6 +74,8 @@ tools/demo-fs             MCP server: fs.read, scoped to the demo root
 | `add_servers { json }` | validate Anthropic JSON, save, spawn, list tools |
 | `tunnel_start` | spawn `opentunnel route add <port>`, scrape URL, poll it |
 | `tunnel_stop` | kill the tunnel child, back to `off` |
+| `tunnel_revoke` | remove the route (URL dies), then stop |
+| `resolve_session` | approve once + remember until the app quits |
 
 ## Hub
 
@@ -134,6 +138,9 @@ One click runs `opentunnel route add <port>` (or `$OPENTUNNEL_BIN`), scrapes the
   `opentunnel down`, which stops it and removes that unit. Stop is per-profile,
   not per-app: it also takes down a tunnel started outside this app.
 - Routes stay configured while stopped, so starting again reuses the same URL.
+- **Revoke link** burns the route (`opentunnel route remove`) and stops the
+  service: the URL dies for good, the next start mints a fresh random one.
+  Use it when a link leaks.
 - Public URL = public. It serves the hub as-is: demo data only, no auth.
 
 Verified 2026-11-20 on this box (tunnel `kfgepc72im6k.opentunnel.xyz`):

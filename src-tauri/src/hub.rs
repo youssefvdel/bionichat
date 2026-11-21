@@ -70,6 +70,9 @@ pub struct Hub {
     /// while exactly one server provides it; on collision the caller must use
     /// `server__tool`. Rebuilt by every `tools_union`.
     aliases: Mutex<HashMap<String, (String, String)>>,
+    /// Tools the dashboard approved until the app quits. Dies with the
+    /// process: nothing persistent, so a restart re-arms every Ask.
+    session_allows: Mutex<HashSet<(String, String)>>,
     pending: Mutex<HashMap<u64, Pending>>,
     next_id: AtomicU64,
     app: Option<AppHandle>,
@@ -87,6 +90,7 @@ impl Hub {
             catalog: Mutex::new(HashMap::new()),
             quarantine: Mutex::new(HashSet::new()),
             aliases: Mutex::new(HashMap::new()),
+            session_allows: Mutex::new(HashSet::new()),
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             app,
@@ -103,6 +107,7 @@ impl Hub {
             catalog: Mutex::new(HashMap::new()),
             quarantine: Mutex::new(HashSet::new()),
             aliases: Mutex::new(HashMap::new()),
+            session_allows: Mutex::new(HashSet::new()),
             pending: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             app: None,
@@ -320,18 +325,44 @@ impl Hub {
         views
     }
 
-    /// Answer a prompt. Returns false when the id is unknown (already timed out).
+    /// Answer a prompt once. Returns false when the id is unknown.
     pub fn resolve(&self, id: u64, approve: bool) -> bool {
+        self.resolve_inner(id, approve, false)
+    }
+
+    /// Approve a prompt and remember it until the app quits: later calls to
+    /// the same tool skip the prompt. Deny still wins over this later.
+    pub fn resolve_session(&self, id: u64) -> bool {
+        self.resolve_inner(id, true, true)
+    }
+
+    fn resolve_inner(&self, id: u64, approve: bool, remember: bool) -> bool {
         let entry = self
             .pending
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(&id);
         match entry {
-            Some(pending) => pending.reply.send(approve).is_ok(),
+            Some(pending) => {
+                if remember && approve {
+                    self.session_allows
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .insert((pending.server.clone(), pending.tool.clone()));
+                }
+                pending.reply.send(approve).is_ok()
+            }
             None => false,
         }
     }
+
+    fn session_allowed(&self, server: &str, tool: &str) -> bool {
+        self.session_allows
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .contains(&(server.to_string(), tool.to_string()))
+    }
+
 
     async fn ask(
         &self,
@@ -423,11 +454,14 @@ impl Hub {
         let read_only = self.read_only_cached(&server, &tool);
         match policy::decision(&registry.policies, &server, &tool, read_only) {
             Decision::Deny => return Err((-32001, "denied by policy".to_string())),
-            Decision::Ask => {
+            // An explicit Deny above always wins. A session grant skips the
+            // prompt for this run only; nothing is written to disk.
+            Decision::Ask if !self.session_allowed(&server, &tool) => {
                 if !self.ask(&server, &tool, &arguments).await? {
                     return Err((-32001, "denied in the dashboard".to_string()));
                 }
             }
+            _ => {}
             Decision::Allow => {}
         }
 
@@ -874,6 +908,46 @@ mod tests {
             body.expect("body").pointer("/error/code"),
             Some(&json!(-32002))
         );
+    }
+
+    #[tokio::test]
+    async fn session_grant_skips_later_prompts() {
+        let hub = test_hub("session").with_timeout(Duration::from_secs(5));
+        let (_, warm) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
+            .await;
+        assert!(warm.expect("warm list").get("error").is_none());
+        let mut registry = hub.registry();
+        registry.set_policy("fs", "write", Decision::Ask);
+        registry::save(&hub.registry_path, &registry).unwrap();
+        let call = || {
+            let hub = hub.clone();
+            async move {
+                hub.handle_rpc(json!({
+                    "jsonrpc":"2.0","id":7,"method":"tools/call",
+                    "params":{"name":"write","arguments":{"path":"session.txt","content":"x"}}
+                }))
+                .await
+            }
+        };
+
+        // First call prompts; the dashboard grants it until restart.
+        let task = tokio::spawn(call());
+        let id = loop {
+            if let Some(view) = hub.pending().first() {
+                break view.id;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(hub.resolve_session(id));
+        let (_, first) = task.await.expect("task");
+        assert!(first.expect("body").get("error").is_none());
+
+        // Second call sails through with no new prompt.
+        let (_, second) = call().await;
+        let second = second.expect("second body");
+        assert!(second.get("error").is_none(), "session grant must hold: {second}");
+        assert!(hub.pending().is_empty(), "no second prompt allowed");
     }
 
     #[tokio::test]
