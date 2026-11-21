@@ -89,6 +89,9 @@ sidebar.
   dashed edge from the hub while it runs.
 - A finished call keeps a ring for 6 seconds (green ok, red failure), then
   fades. Nothing stays coloured forever.
+- Followed calls read like a terminal, not JSON: the rail shows the kind
+  (Shell / Read / Write / Edit), the command or path, then the output, with
+  a Show all toggle for long runs.
 - Navigation is custom, so it works in the embedded CEF window: pan and zoom
   the canvas, click a tool for its description.
 - `bun run debug-page` writes `dist/_debug.html`: the real bundle against

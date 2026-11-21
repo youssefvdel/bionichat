@@ -560,7 +560,7 @@ impl Hub {
         let preview = value
             .pointer("/content/0/text")
             .and_then(Value::as_str)
-            .map(|text| preview_of(text, 220));
+            .map(|text| preview_of(text, 900));
         self.note(&server, &tool, &arguments, started, "ok", preview);
         Ok(value)
     }

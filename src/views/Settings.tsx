@@ -243,8 +243,8 @@ export function Settings({
           </span>
         }
       >
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_290px]">
-          <div className="clay-bump min-h-[320px] overflow-hidden !p-0">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="clay-bump min-h-[440px] overflow-hidden !p-0">
             <ToolFlow servers={servers} flash={flash} running={running} sessions={hubSessions} />
           </div>
           <LiveRail running={running} activity={activity} bare />
