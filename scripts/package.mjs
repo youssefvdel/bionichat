@@ -5,7 +5,7 @@
 //   bun run package            -> dist/bionichat-<platform>-<version>.zip
 import { execFileSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 const exe = process.platform === "win32" ? ".exe" : "";
 const files = ["bionichat", "fs", "bash", "skill", "bionichat-tunnel"].map((name) => name + exe);
@@ -53,16 +53,14 @@ for (const file of files) {
 // The build layout differs by crate version: `cef-dll-sys-<hash>/out/cef_*`
 // and `cef-dll-sys/<hash>/out/cef_*` both exist in the wild, so find the
 // library itself and take its directory instead of guessing the path.
-// A runtime directory is the one that also carries Chromium's assets. A bare
-// libcef.dll also appears higher up in build/, next to 60 GB of cargo output:
-// copying that would ship half the build tree.
+// The runtime ships in a directory of its own (cef_windows_x86_64,
+// cef_linux_x86_64, Chromium Embedded Framework.framework). cargo also drops
+// a libcef.dll into cef-dll-sys/<hash>/out/ next to 150 MB of rlibs, so match
+// the directory name, never just the library.
 function isRuntimeDir(dir) {
-  const hasLibrary = ["libcef.dll", "libcef.so", "Chromium Embedded Framework.framework"].some((name) =>
-    existsSync(join(dir, name)),
-  );
-  if (!hasLibrary) return false;
-  if (existsSync(join(dir, "locales"))) return true;
-  return readdirSync(dir).some((name) => name.endsWith(".pak"));
+  const base = basename(dir);
+  if (!base.startsWith("cef_") && !base.endsWith(".framework")) return false;
+  return ["libcef.dll", "libcef.so", "Chromium Embedded Framework"].some((name) => existsSync(join(dir, name)));
 }
 
 function findCefDir(dir, depth) {
@@ -84,9 +82,13 @@ for (const dir of cefDirs) {
   console.log(`packed the CEF runtime from ${dir}`);
 }
 
-const archive = resolve("dist", `bionichat-${platform}-${version}.zip`);
+const archiveDir = resolve("dist");
+mkdirSync(archiveDir, { recursive: true });
+const archive = join(archiveDir, `bionichat-${platform}-${version}.zip`);
 if (process.platform === "win32") {
-  execFileSync("powershell", ["-NoProfile", "-Command", `Compress-Archive -Path '${stage}\\*' -DestinationPath '${archive}' -Force`], { stdio: "inherit" });
+  // Compress-Archive chokes on a 276 MB libcef.dll; the bsdtar that ships with
+  // Windows 11 writes the same zip from the staging folder.
+  execFileSync("tar", ["-a", "-c", "-f", archive, "-C", stage, "."], { stdio: "inherit" });
 } else {
   execFileSync("zip", ["-rq", archive, "."], { cwd: stage, stdio: "inherit" });
 }
