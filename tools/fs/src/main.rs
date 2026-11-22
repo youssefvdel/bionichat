@@ -201,14 +201,16 @@ impl FsServer {
                 Ok(bytes) => {
                     use base64::Engine as _;
                     let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                    // A short text block first: clients show it, and the hub
-                    // appends the server clock to it. The image rides second.
+                    // The image goes first: several chat clients render only
+                    // the first block of a tool result, and an image the model
+                    // cannot see is useless. The hub appends its clock to the
+                    // text block that follows.
                     CallToolResult::success(vec![
+                        ContentBlock::image(encoded, mime),
                         ContentBlock::text(format!(
                             "{requested} (image, {mime}, {} bytes)",
                             bytes.len()
                         )),
-                        ContentBlock::image(encoded, mime),
                     ])
                 }
                 Err(error) => {
