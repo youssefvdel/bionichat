@@ -88,5 +88,5 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 
 ## Open
 - Name: bionichat locked and applied to crate, productName, identifier and window title 2026-11-20. Google sign-in (moves with chats phase).
-- Scaffold: DONE 2026-11-20 (P1). Default runtime is `wry` so a fresh clone builds without the CEF download; `--features cef` is wired and tested separately. Flip the default once CEF is confirmed on the demo box.
+- Scaffold: DONE 2026-11-20 (P1). Renderer: CEF is now the default on Linux and Windows (proven building and painting on both, 2026-11-22); `wry` stays as the opt-out and as the macOS CI path.
 - CEF gate: RESOLVED 2026-11-20 — `tauri-runtime-cef` alpha.7 builds and renders the dashboard (gtk4). 2026-11-21: the full P3 dashboard renders on CEF (chip reads "cef"); no sudo needed via `scripts/run-cef.sh`, which points `CHROME_DEVEL_SANDBOX` at the root-owned helper. Still open: CEF idle RSS vs wry before chats.

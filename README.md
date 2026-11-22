@@ -57,16 +57,19 @@ cargo tauri dev          # or: bunx @tauri-apps/cli@3.0.0-alpha.6 dev
 `beforeDevCommand` compiles the frontend (`bun build`) and the two demo MCP
 servers, so one command is enough on a clean tree.
 
-System webview (wry) is the default runtime. To build the bundled-Chromium
-renderer:
+The bundled-Chromium renderer (CEF) is the default: one engine, the same
+pixels on Linux and Windows. Building it needs a C++ chain — `cmake` and
+`ninja` (plus MSVC on Windows); the first Linux build also pulls gtk4 and a
+~700 MB CEF download.
 
 ```bash
-cargo tauri dev -- --features cef     # gtk4 + a ~700 MB CEF download
-cargo build --no-default-features --features cef
+cargo build            # CEF, the default
+cargo build --no-default-features --features wry   # opt-out: system webview
 ```
 
 `cef` and `wry` are mutually exclusive (gtk4 vs gtk3); the crate refuses to
-build with both.
+build with both. Windows needs Ninja on PATH (`winget install Ninja-build.Ninja`)
+and CMake (`winget install Kitware.CMake`).
 
 CEF needs Chromium's SUID sandbox helper to be root-owned, otherwise the
 renderer aborts at startup. The build already installs a correct helper under

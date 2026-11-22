@@ -35,7 +35,14 @@ jobs:
         shell: bash
         run: cargo build --release --workspace --exclude bionichat
 
-      - name: Build the app (WebView2 renderer)
+      - name: Toolchain for CEF (Chromium is built with cmake + ninja)
+        shell: bash
+        run: |
+          choco install ninja -y --no-progress
+          cmake --version
+          ninja --version
+
+      - name: Build the app (CEF renderer)
         shell: bash
         run: cargo build --release --manifest-path src-tauri/Cargo.toml
 
@@ -43,24 +50,16 @@ jobs:
         shell: bash
         run: bun run tunnel:build
 
-      - name: Pack the runnable folder
+      - name: Pack the runnable folder (app + tools + tunnel + CEF runtime)
         shell: bash
         run: |
-          mkdir -p dist-windows
-          cp target/release/bionichat.exe dist-windows/
-          cp target/release/fs.exe dist-windows/
-          cp target/release/bash.exe dist-windows/
-          cp target/release/skill.exe dist-windows/
-          cp target/release/bionichat-tunnel.exe dist-windows/
-          ls -la dist-windows
-          powershell -NoProfile -Command "Compress-Archive -Path 'dist-windows\*' -DestinationPath 'bionichat-windows.zip' -Force"
+          bun run package
+          ls -la dist
 
       - uses: actions/upload-artifact@v4
         with:
           name: bionichat-windows
-          path: |
-            dist-windows/
-            bionichat-windows.zip
+          path: dist/*.zip
 
   macos:
     runs-on: macos-latest
@@ -87,9 +86,9 @@ jobs:
         shell: bash
         run: cargo build --release --workspace --exclude bionichat
 
-      - name: Build the app (WebKit renderer)
+      - name: Build the app (WKWebView: CEF on macOS is unproven here)
         shell: bash
-        run: cargo build --release --manifest-path src-tauri/Cargo.toml
+        run: cargo build --release --no-default-features --features wry --manifest-path src-tauri/Cargo.toml
 
       - name: Put the tunnel helper beside the app
         shell: bash

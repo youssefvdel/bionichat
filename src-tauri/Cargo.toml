@@ -14,13 +14,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "=3.0.0-alpha.4", features = [] }
 
 [features]
-default = ["wry"]
-# System webview (webkit2gtk on Linux). Default so the app runs without the
-# ~700 MB CEF download; both renderers are pinned to the same Tauri alpha.
-wry = ["dep:tauri-runtime-wry"]
-# Bundled Chromium (CEF 154.5.0). Same pixels on every machine; required before
-# chats land. Builds gtk4, so it cannot be combined with `wry`.
+# Bundled Chromium everywhere: same engine and same pixels on Linux and
+# Windows. It needs a C++ chain to build (cmake + ninja, plus MSVC on Windows),
+# and on Linux it pulls gtk4 and a ~700 MB CEF download on the first build.
+default = ["cef"]
 cef = ["dep:tauri-runtime-cef"]
+# Opt-out only: the system webview (webkit2gtk on Linux, WebView2 on Windows,
+# WKWebView on macOS). Kept for machines that cannot build CEF, and as the
+# macOS CI path until CEF there is measured.
+wry = ["dep:tauri-runtime-wry"]
 
 [dependencies]
 tauri = { version = "=3.0.0-alpha.6", features = [] }

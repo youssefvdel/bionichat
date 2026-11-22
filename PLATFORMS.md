@@ -37,9 +37,11 @@ so `MACOS.md` has the first-run checklist instead of claims.
 - **Window drag**: the title bar moves the window through backend commands,
   because the CEF runtime has no drag API. Works on Linux; on Windows and
   macOS it goes through the same Tauri calls but nobody has dragged it there.
-- **Renderer**: Linux defaults to `wry` and can build with CEF
-  (`--no-default-features --features cef`); Windows uses WebView2; macOS uses
-  WKWebView.
+- **Renderer**: CEF (bundled Chromium) is the default on Linux and Windows:
+  proven building and rendering on both (Windows needs cmake + ninja, then
+  `cargo build` with no flags). macOS builds with `--no-default-features
+  --features wry` (WKWebView) until CEF there is measured. `wry` remains the
+  opt-out on every platform.
 - **Files**: `bash` starts in the user's home (`HOME`, or `USERPROFILE` on
   Windows); data lives in Tauri's `app_data_dir`, which is
   `~/.local/share/com.bionichat.app` on Linux,

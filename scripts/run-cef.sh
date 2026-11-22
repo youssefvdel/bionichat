@@ -2,7 +2,7 @@
 # Run the CEF build without sudo.
 #
 # Chromium refuses to start unless its SUID sandbox helper is root-owned and
-# mode 4755. `cargo build --features cef` drops a NON-setuid copy next to the
+# mode 4755. `cargo build` (CEF default) drops a NON-setuid copy next to the
 # binary, which Chromium then finds and rejects. Two ways out:
 #
 #   a) sudo chown root:root target/debug/chrome-sandbox && sudo chmod 4755 ...
@@ -18,7 +18,7 @@ killer="$root/target/debug/chrome-sandbox"
 
 if [[ ! -u "$helper" ]]; then
   echo "missing setuid helper: $helper" >&2
-  echo "build it first: cd src-tauri && cargo build --no-default-features --features cef" >&2
+  echo "build it first: cargo build   (CEF is the default)" >&2
   exit 1
 fi
 
