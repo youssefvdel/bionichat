@@ -59,7 +59,7 @@ function Server({
           />
           auto-restart
         </label>
-        <RemoveButton name={row.name} onConfirm={() => void remove()} />
+        {!row.builtin && <RemoveButton name={row.name} onConfirm={() => void remove()} />}
       </div>
 
       {row.error && (

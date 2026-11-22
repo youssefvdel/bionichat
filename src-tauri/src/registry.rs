@@ -61,6 +61,10 @@ pub struct ServerSpec {
     /// Built-in tools share one namespace, `core`.
     #[serde(default)]
     pub namespace: Option<String>,
+    /// Built-in servers ship with the app and cannot be removed from the UI.
+    /// Their tools are the `core_*` set.
+    #[serde(default)]
+    pub builtin: bool,
     /// Restart the crashed server automatically (max 3 backoff attempts).
     #[serde(default)]
     pub autorestart: bool,
@@ -144,6 +148,24 @@ pub fn load(path: &Path) -> Option<Registry> {
     }
 }
 
+/// Take a server out of the registry. The built-ins are not the user's to
+/// remove: their tools are the only guaranteed way to touch the machine.
+pub fn remove(registry: &mut Registry, name: &str) -> Result<(), String> {
+    let Some(spec) = registry.servers.iter().find(|spec| spec.name == name) else {
+        return Err(format!("no registered server `{name}`"));
+    };
+    if spec.builtin {
+        return Err(format!(
+            "`{name}` is a built-in server: its core_* tools ship with the app and cannot be removed"
+        ));
+    }
+    registry.servers.retain(|spec| spec.name != name);
+    registry
+        .policies
+        .retain(|key, _| !key.starts_with(&format!("{name}__")));
+    Ok(())
+}
+
 pub fn save(path: &Path, registry: &Registry) -> Result<(), String> {
     let text = serde_json::to_string_pretty(registry).map_err(|e| e.to_string())?;
     if let Some(parent) = path.parent() {
@@ -158,6 +180,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
         ServerSpec {
             name: "fs".into(),
             namespace: Some("core".into()),
+            builtin: true,
             autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("fs").display().to_string(),
@@ -168,6 +191,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
         ServerSpec {
             name: "bash".into(),
             namespace: Some("core".into()),
+            builtin: true,
             autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("bash").display().to_string(),
@@ -178,6 +202,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
         ServerSpec {
             name: "skill".into(),
             namespace: Some("core".into()),
+            builtin: true,
             autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("skill").display().to_string(),
@@ -263,6 +288,7 @@ pub fn parse_anthropic(input: &str) -> Result<Vec<ServerSpec>, String> {
         specs.push(ServerSpec {
             name: name.to_string(),
             namespace: None,
+            builtin: false,
             autorestart: false,
             transport,
         });
@@ -319,6 +345,66 @@ fn string_map(value: Option<&Value>, at: &str) -> Result<BTreeMap<String, String
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn registry_with_builtin() -> Registry {
+        Registry {
+            servers: vec![
+                ServerSpec {
+                    name: "fs".into(),
+                    namespace: Some("core".into()),
+                    builtin: true,
+                    autorestart: false,
+                    transport: Transport::Stdio {
+                        command: "/bin/true".into(),
+                        args: Vec::new(),
+                        env: BTreeMap::new(),
+                    },
+                },
+                ServerSpec {
+                    name: "notes".into(),
+                    namespace: None,
+                    builtin: false,
+                    autorestart: false,
+                    transport: Transport::Stdio {
+                        command: "/bin/true".into(),
+                        args: Vec::new(),
+                        env: BTreeMap::new(),
+                    },
+                },
+            ],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn built_in_servers_cannot_be_removed() {
+        let mut registry = registry_with_builtin();
+        let error = remove(&mut registry, "fs").expect_err("built-ins must refuse");
+        assert!(
+            error.contains("built-in"),
+            "the refusal must say why: {error}"
+        );
+        assert_eq!(registry.servers.len(), 2, "nothing may be dropped");
+    }
+
+    #[test]
+    fn user_servers_are_removable_with_their_policies() {
+        let mut registry = registry_with_builtin();
+        registry
+            .policies
+            .insert("notes__read".into(), Decision::Allow);
+        remove(&mut registry, "notes").expect("user server removes");
+        assert_eq!(registry.servers.len(), 1);
+        assert!(registry.policies.is_empty(), "its policies go too");
+    }
+
+    #[test]
+    fn removing_an_unknown_server_is_an_error() {
+        let mut registry = registry_with_builtin();
+        assert!(remove(&mut registry, "ghost").is_err());
+    }
+
     use super::*;
 
     #[test]

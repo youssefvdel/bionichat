@@ -12,6 +12,7 @@ export interface ToolInfo {
 export interface ServerRow {
   name: string;
   namespace: string;
+  builtin: boolean;
   transport: string;
   secret_keys: string[];
   autorestart: boolean;

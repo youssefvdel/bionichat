@@ -92,7 +92,9 @@ last known listing, so a slow server (anything behind `npx`) cannot stall an
 agent's first call.
 
 Servers are added and removed from Settings → Servers. Removing one drops its
-process, its tools and its stored policies. A registry file that will not
+process, its tools and its stored policies. The built-in `core` servers cannot
+be removed: they are the app's own hands, and the backend refuses even if a
+call comes from somewhere else. A registry file that will not
 parse is never overwritten: the app keeps a `.bad-<epoch>` copy and refuses to
 reseed over it.
 

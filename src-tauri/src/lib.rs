@@ -73,6 +73,8 @@ struct ServerRow {
     name: String,
     /// The prefix its tools are advertised under (`core` for the built-ins).
     namespace: String,
+    /// Built-ins ship with the app; the UI hides Remove for them.
+    builtin: bool,
     transport: String,
     secret_keys: Vec<String>,
     autorestart: bool,
@@ -86,6 +88,7 @@ impl ServerRow {
         Self {
             name: spec.name.clone(),
             namespace: spec.namespace().to_string(),
+            builtin: spec.builtin,
             transport: spec.transport.label(),
             secret_keys: spec.transport.secret_keys(),
             autorestart: spec.autorestart,
@@ -351,15 +354,11 @@ async fn add_servers(json: String, state: State<'_, AppState>) -> Result<Vec<Ser
 }
 
 /// Drop a server for good: its process, its tools, its stored policies.
+/// Built-in core servers refuse: they are the app's own hands.
 #[tauri::command]
 fn remove_server(name: String, state: State<'_, AppState>) -> Result<Vec<ServerRow>, String> {
     let mut registry = state.hub.registry();
-    let before = registry.servers.len();
-    registry.servers.retain(|spec| spec.name != name);
-    if registry.servers.len() == before {
-        return Err(format!("no registered server `{name}`"));
-    }
-    registry.policies.retain(|key, _| !key.starts_with(&format!("{name}__")));
+    registry::remove(&mut registry, &name)?;
     registry::save(&state.registry_path, &registry)?;
     state.hub.release(&name);
     state.hub.forget(&name);
@@ -727,6 +726,10 @@ pub fn run() {
                         // share the `core` prefix.
                         if existing.namespace.is_none() {
                             existing.namespace = spec.namespace.clone();
+                            added = true;
+                        }
+                        if spec.builtin && !existing.builtin {
+                            existing.builtin = true;
                             added = true;
                         }
                         if let (

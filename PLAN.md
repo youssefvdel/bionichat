@@ -26,6 +26,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P5: Tauri approval gate (ask/session-allow/deny), link revoke with fresh URL on next start.
 - P6: live activity feed on the main page.
 - P7: data-terminal dark restyle; hub-spur logo concepts (A1 refined + power-b finalists).
+- P17a: built-in core servers are not removable (flag in the registry, guard in registry::remove with 3 tests, Remove hidden in the UI).
 - P17: namespaced tool names (`core_*`, `<server>_*`), prefix routing with no list-first, cached listings (list 4 ms, call 6-11 ms), remove-server command + two-step button, registry parse failures keep a backup instead of reseeding. Chatbot removed.
 - P16: in-app chat: project folder, OpenAI-compatible model config, tool loop through the hub, calls rendered as terminal cards. Shell defaults to the project folder; registry self-heals when the app folder moves.
 - P15: Projects = folders the user chooses via the in-app picker (browse + Use this folder), saved to projects.json; old ~/Projects listing removed.
