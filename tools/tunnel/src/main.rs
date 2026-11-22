@@ -69,6 +69,23 @@ fn main() -> Result<()> {
         ca_cert: None,
     });
 
+    // Two helpers on one identity break the tunnel (the server sees the same
+    // tunnel register twice). A listening socket is the cheapest cross-platform
+    // lock: binding the same port twice fails.
+    let lock = std::net::TcpListener::bind(("127.0.0.1", args.port + 2));
+    match lock {
+        Ok(listener) => {
+            std::mem::forget(listener);
+        }
+        Err(_) => {
+            eprintln!(
+                "another bionichat tunnel is already running for port {}",
+                args.port
+            );
+            std::process::exit(3);
+        }
+    }
+
     let runtime = tokio::runtime::Runtime::new().context("starting the async runtime")?;
     runtime.block_on(async move {
         if args.revoke {
