@@ -63,6 +63,22 @@ fn schema(properties: Value, required: &[&str]) -> Arc<Map<String, Value>> {
     Arc::new(obj.as_object().expect("object schema").clone())
 }
 
+/// Biggest image the tool will return; a chat client has to carry it inline.
+const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
+
+/// MIME type for a file the model can look at, by extension.
+fn image_mime(path: &std::path::Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        _ => return None,
+    })
+}
+
 fn numbered(text: &str, offset: usize) -> String {
     text.lines()
         .enumerate()
@@ -173,6 +189,33 @@ impl FsServer {
             Ok(path) => path,
             Err(message) => return CallToolResult::error(vec![ContentBlock::text(message)]),
         };
+        if let Some(mime) = image_mime(&path) {
+            return match std::fs::read(&path) {
+                Ok(bytes) if bytes.len() > MAX_IMAGE_BYTES => CallToolResult::error(vec![
+                    ContentBlock::text(format!(
+                        "`{requested}` is {} bytes, larger than the {} byte image limit",
+                        bytes.len(),
+                        MAX_IMAGE_BYTES
+                    )),
+                ]),
+                Ok(bytes) => {
+                    use base64::Engine as _;
+                    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                    // A short text block first: clients show it, and the hub
+                    // appends the server clock to it. The image rides second.
+                    CallToolResult::success(vec![
+                        ContentBlock::text(format!(
+                            "{requested} (image, {mime}, {} bytes)",
+                            bytes.len()
+                        )),
+                        ContentBlock::image(encoded, mime),
+                    ])
+                }
+                Err(error) => {
+                    CallToolResult::error(vec![ContentBlock::text(format!("{error}"))])
+                }
+            };
+        }
         match std::fs::read(&path) {
             Ok(bytes) => match String::from_utf8(bytes) {
                 Ok(text) => {

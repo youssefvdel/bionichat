@@ -2,7 +2,7 @@
 //! public URL it prints, then poll the URL until it answers over TLS.
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Mutex,
     time::Duration,
 };
@@ -12,7 +12,7 @@ use std::process::Stdio;
 
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    process::{Child, Command},
+    process::Child,
 };
 
 const START_TIMEOUT: Duration = Duration::from_secs(45);
@@ -63,7 +63,7 @@ impl TunnelManager {
         let Some(binary) = locate_binary() else {
             return self.info();
         };
-        let Ok(output) = std::process::Command::new(&binary).arg("status").output() else {
+        let Ok(output) = cli(&binary).arg("status").output() else {
             return self.info();
         };
         if !output.status.success() {
@@ -103,9 +103,9 @@ impl TunnelManager {
                 .as_ref()
                 .and_then(|url| route_name(url)),
         ) {
-            let remove = Command::new(&binary)
-                .args(["route", "remove", name.as_str()])
-                .output();
+            let mut remove_command = cli_async(&binary);
+            remove_command.args(["route", "remove", name.as_str()]);
+            let remove = remove_command.output();
             match tokio::time::timeout(Duration::from_secs(10), remove).await {
                 Ok(Ok(output)) if output.status.success() => {}
                 Ok(Ok(output)) => eprintln!(
@@ -134,7 +134,7 @@ impl TunnelManager {
         }
 
         if let Some(binary) = locate_binary() {
-            let down = Command::new(&binary).arg("down").output();
+            let down = cli_async(&binary).arg("down").output();
             match tokio::time::timeout(Duration::from_secs(10), down).await {
                 Ok(Ok(output)) if output.status.success() => {}
                 Ok(Ok(output)) => eprintln!(
@@ -166,7 +166,7 @@ impl TunnelManager {
             ));
         };
 
-        let mut child = match Command::new(&binary)
+        let mut child = match cli_async(&binary)
             .arg("route")
             .arg("add")
             .arg(hub_port.to_string())
@@ -337,6 +337,48 @@ fn route_url(line: &str) -> Option<String> {
         return None;
     }
     Some(format!("https://{host}"))
+}
+
+/// Build the command that runs the tunnel CLI. On Windows an npm install
+/// leaves `opentunnel.cmd`, which CreateProcess cannot run directly, so a
+/// script goes through `cmd /C`.
+fn cli(binary: &Path) -> std::process::Command {
+    #[cfg(windows)]
+    {
+        let script = binary
+            .extension()
+            .map(|ext| {
+                let ext = ext.to_string_lossy().to_ascii_lowercase();
+                ext == "cmd" || ext == "bat"
+            })
+            .unwrap_or(false);
+        if script {
+            let mut command = std::process::Command::new("cmd");
+            command.arg("/C").arg(binary);
+            return command;
+        }
+    }
+    std::process::Command::new(binary)
+}
+
+/// Same rule as `cli`, for the async spawn used while rewiring a live route.
+fn cli_async(binary: &Path) -> tokio::process::Command {
+    #[cfg(windows)]
+    {
+        let script = binary
+            .extension()
+            .map(|ext| {
+                let ext = ext.to_string_lossy().to_ascii_lowercase();
+                ext == "cmd" || ext == "bat"
+            })
+            .unwrap_or(false);
+        if script {
+            let mut command = tokio::process::Command::new("cmd");
+            command.arg("/C").arg(binary);
+            return command;
+        }
+    }
+    tokio::process::Command::new(binary)
 }
 
 fn locate_binary() -> Option<PathBuf> {

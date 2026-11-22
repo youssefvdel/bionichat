@@ -1,0 +1,84 @@
+# Windows
+
+Short answer: the app is built to run on Windows, and the parts that were
+Linux-only are fixed. What is missing is a Windows build, because a Tauri app
+cannot be cross-compiled from this Linux box.
+
+## What already works on Windows
+
+- Tauri shell, the dashboard (React) and the hub (axum) are plain
+  cross-platform code.
+- `tauri-runtime-cef` declares `x86_64-pc-windows-msvc` as a supported target,
+  so the Chromium renderer is available; `wry` (WebView2) is the default and
+  works out of the box.
+- The `fs` and `skill` servers are `std::fs` only. Absolute Windows paths pass
+  straight through; relative ones join the base and reject `..` escapes.
+- Data lives in Tauri's `app_data_dir` (`%APPDATA%\com.bionichat.app`), so the
+  registry, projects and skills follow the platform.
+
+## What was Linux-only, now fixed
+
+- `bash` ran `sh -c`; Windows has no `sh`, so it now runs `cmd /C` there and
+  keeps `sh -c` everywhere else.
+- The tunnel helper ran `opentunnel` directly. An npm install on Windows leaves
+  `opentunnel.cmd`, which `CreateProcess` cannot run, so a `.cmd`/`.bat` target
+  is launched through `cmd /C` (sync and async paths both).
+
+## Proven on Windows (22 Nov 2026)
+
+Built on the Windows PC with `cargo build --release` and run there:
+
+- The app starts and opens its window in the desktop session.
+- The hub answers on `POST http://127.0.0.1:8787/mcp` with all five `core_*`
+  tools and their schemas.
+- `core_bash` ran through `cmd /C` and returned `win-ok` plus
+  `C:\Users\Administrator`, the user's home, with the server clock attached.
+
+Artifacts: `C:\Users\Administrator\bionichat-win\` holds `bionichat.exe`
+(13.5 MB) with `fs.exe`, `bash.exe` and `skill.exe` beside it, which is exactly
+the layout the app expects.
+
+Two things that bit during that first run, worth knowing:
+
+- Launching the exe over SSH fails with `WebView2 error: Invalid window
+  handle`, because SSH runs in session 0 where Windows will not create a
+  window. It must run in the logged-on desktop session.
+- Screenshots of that session came back blank while the display was asleep, so
+  the visual check was done by talking to the hub instead.
+
+## What is still unproven on Windows
+
+- The **CEF** renderer: it declares MSVC support, but nobody has run it here.
+  The realistic first run is WebView2 (`wry`), which needs the WebView2 runtime
+  (preinstalled on Windows 10/11).
+- **OpenTunnel** on Windows: the CLI is cross-platform, but its background
+  service model differs from the Linux systemd user service this app was
+  tested with. Without it, the app still works on localhost only.
+- Window drag: the custom title bar moves the window by asking the backend for
+  a new position. That is Windows-safe (`set_position`), but only the Linux
+  path has been exercised.
+
+## How to get a build
+
+Two honest routes:
+
+1. **GitHub Actions** (`.github/workflows/windows.yml`): push the repo, run the
+   workflow, download `bionichat-windows-<version>`. It builds the UI, the
+   three tool servers and the app on `windows-latest`, then uploads the `.exe`
+   set as one folder: `bionichat.exe` plus `fs.exe`, `bash.exe`, `skill.exe`
+   beside it (the app looks for its tools next to itself).
+2. **Build on the Windows machine itself**: install Rust (MSVC toolchain),
+   Bun, and the Visual Studio Build Tools, then:
+
+   ```powershell
+   bun install
+   bun run build
+   cargo build --release --workspace --exclude bionichat
+   cargo build --release --manifest-path src-tauri/Cargo.toml
+   ```
+
+   Run `src-tauri\target\release\bionichat.exe` with the three tool `.exe`s in
+   the same folder.
+
+Installer packaging (NSIS/MSI) is not wired yet: `tauri.conf.json` has no
+bundle targets for Windows, so the artifact is a folder, not a setup wizard.

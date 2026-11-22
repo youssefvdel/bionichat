@@ -1,0 +1,57 @@
+name: windows
+
+# Windows build. Linux stays the development target; this produces the .exe
+# and an installer so the app can be tried on a real Windows machine.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Build the UI and the tool servers
+        shell: bash
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+          cargo build --release --workspace --exclude bionichat
+
+      - name: Read the app version
+        id: version
+        shell: bash
+        run: echo "value=$(cargo metadata --no-deps --format-version 1 | python -c "import json,sys; print(json.load(sys.stdin)['packages'][0]['version'])")" >> "$GITHUB_OUTPUT"
+
+      - name: Build the app (WebView2 renderer)
+        shell: bash
+        run: |
+          cargo build --release --manifest-path src-tauri/Cargo.toml
+
+      - name: Collect the binary and its tools
+        shell: bash
+        run: |
+          mkdir -p dist-windows
+          cp src-tauri/target/release/bionichat.exe dist-windows/
+          cp target/release/fs.exe dist-windows/
+          cp target/release/bash.exe dist-windows/
+          cp target/release/skill.exe dist-windows/
+          ls -la dist-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bionichat-windows-${{ steps.version.outputs.value }}
+          path: dist-windows/

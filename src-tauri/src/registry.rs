@@ -183,7 +183,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
             builtin: true,
             autorestart: false,
             transport: Transport::Stdio {
-                command: exe_dir.join("fs").display().to_string(),
+                command: exe_dir.join(if cfg!(windows) { "fs.exe" } else { "fs" }).display().to_string(),
                 args: vec![file_root.display().to_string()],
                 env: BTreeMap::new(),
             },
@@ -194,7 +194,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
             builtin: true,
             autorestart: false,
             transport: Transport::Stdio {
-                command: exe_dir.join("bash").display().to_string(),
+                command: exe_dir.join(if cfg!(windows) { "bash.exe" } else { "bash" }).display().to_string(),
                 args: vec![],
                 env: BTreeMap::new(),
             },
@@ -205,7 +205,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
             builtin: true,
             autorestart: false,
             transport: Transport::Stdio {
-                command: exe_dir.join("skill").display().to_string(),
+                command: exe_dir.join(if cfg!(windows) { "skill.exe" } else { "skill" }).display().to_string(),
                 args: vec![skills_dir.display().to_string()],
                 env: BTreeMap::new(),
             },

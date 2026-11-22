@@ -16,6 +16,12 @@ OpenAI-compatible model, and its tool calls go back through the same hub, so
 policies, activity and the clock behave exactly as they do for a web client.
 The model key lives in `model.json` (0600) and never reaches the page.
 
+## Platforms
+
+Linux is the development target and the only place this has been run. Windows
+is supported in the code (see `WINDOWS.md` for what changed, what is unproven
+and how to build it). macOS has not been touched.
+
 ## Run
 
 ```bash
@@ -84,6 +90,9 @@ came from and two servers can never collide:
 
 - built-ins share the `core` namespace: `core_read`, `core_write`,
   `core_edit`, `core_bash`, `core_skill`
+- `core_read` answers images (PNG, JPEG, GIF, WebP, BMP, up to 8 MB) as an MCP
+  image block next to a text line, so a vision-capable chat can look at a
+  screenshot or a photo instead of being told it is binary
 - every other server uses its own name: `context7_query-docs`
 
 A call needs no `tools/list` first: the hub resolves the prefix itself, so the

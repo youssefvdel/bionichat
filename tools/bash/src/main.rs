@@ -57,7 +57,7 @@ impl ServerHandler for BashServer {
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult::with_all_items(vec![Tool::new(
             "bash",
-            "Runs a shell command via `sh -c` and returns exit code, stdout and stderr. Mutating: approval required.",
+            "Runs a shell command via `sh -c` (Windows: `cmd /C`) and returns exit code, stdout and stderr. Mutating: approval required.",
             schema(
                 json!({
                     "command": {
@@ -102,8 +102,17 @@ impl ServerHandler for BashServer {
             .and_then(Value::as_u64)
             .unwrap_or(DEFAULT_TIMEOUT_MS)
             .clamp(1_000, MAX_TIMEOUT_MS);
-        let mut child = tokio::process::Command::new("sh");
-        child.arg("-c").arg(command);
+        // Windows has no `sh`: use the command interpreter there, and keep the
+        // POSIX shell everywhere else.
+        let mut child = if cfg!(windows) {
+            let mut cmd = tokio::process::Command::new("cmd");
+            cmd.arg("/C").arg(command);
+            cmd
+        } else {
+            let mut sh = tokio::process::Command::new("sh");
+            sh.arg("-c").arg(command);
+            sh
+        };
         match arguments.get("workdir").and_then(Value::as_str) {
             Some(workdir) => {
                 child.current_dir(workdir);
