@@ -43,6 +43,20 @@ async function call(name: string, args: Record<string, unknown>) {
   return rpc("tools/call", { name, arguments: args });
 }
 
+type Shell = { exit_code: number; stdout: string; stderr: string };
+
+function shellOf(body: any): Shell | null {
+  const text = textOf(body);
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end < 0) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as Shell;
+  } catch {
+    return null;
+  }
+}
+
 function firstLine(text: string): string {
   const line = text.split("\n").find((value) => value.trim().length > 0) ?? "";
   return line.slice(0, 70);
@@ -95,8 +109,14 @@ async function main() {
     0,
   );
 
+  // Pick paths for the platform behind the link before touching files.
+  const probe = await call("core_bash", { command: "echo %OS%" });
+  const isWindows = (shellOf(probe.body)?.stdout ?? "").includes("Windows_NT");
+  const path = isWindows ? `${DIR}\\probe.txt` : "/tmp/opencode/bionichat-conformance/probe.txt";
+  const images = isWindows ? SHOTS : ["/tmp/opencode/v1.png"];
+  record("platform detected", true, isWindows ? "Windows" : "POSIX", probe.ms);
+
   // 3. Write
-  const path = `${DIR}\\probe.txt`;
   const write = await call("core_write", {
     path,
     content: "line one\nline two\nline three\n",
@@ -146,11 +166,20 @@ async function main() {
   );
 
   // 7. Shell
-  const bash = await call("core_bash", { command: "echo conformance-ok && cd" });
+  const bash = await call("core_bash", {
+    command: 'echo conformance-ok && echo "quoted  path" && cd',
+  });
+  const shell = shellOf(bash.body);
   record(
     "core_bash",
-    textOf(bash.body).includes("conformance-ok"),
-    firstLine(textOf(bash.body)),
+    shell?.exit_code === 0 && shell.stdout.includes("conformance-ok"),
+    `exit ${shell?.exit_code} · ${(shell?.stdout ?? "").trim().split("\n")[0]}`,
+    bash.ms,
+  );
+  record(
+    "core_bash keeps quotes intact",
+    shell?.stdout.includes("quoted  path") === true,
+    `exit ${shell?.exit_code}`,
     bash.ms,
   );
 
@@ -164,8 +193,8 @@ async function main() {
   );
 
   // 9. Image: block, then fetch its published URL byte for byte
-  let image = await call("core_read", { path: SHOTS[0] });
-  for (const candidate of SHOTS.slice(1)) {
+  let image = await call("core_read", { path: images[0] });
+  for (const candidate of images.slice(1)) {
     const blocks = image.body?.result?.content ?? [];
     if (blocks[0]?.type === "image") break;
     image = await call("core_read", { path: candidate });
@@ -210,11 +239,14 @@ async function main() {
   );
 
   // 11. Clean up the probe file
-  const rm = await call("core_bash", { command: `del "${path}"` });
+  const rm = await call("core_bash", {
+    command: isWindows ? `del "${path}"` : `rm -f "${path}"`,
+  });
+  const clean = shellOf(rm.body);
   record(
     "cleanup",
-    rm.body?.result?.isError === false,
-    firstLine(textOf(rm.body)),
+    clean?.exit_code === 0,
+    `exit ${clean?.exit_code} ${(clean?.stderr ?? "").trim()}`,
     rm.ms,
   );
 

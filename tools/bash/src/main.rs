@@ -105,11 +105,20 @@ impl ServerHandler for BashServer {
             .clamp(1_000, MAX_TIMEOUT_MS);
         // Windows has no `sh`: use the command interpreter there, and keep the
         // POSIX shell everywhere else.
-        let mut child = if cfg!(windows) {
+        #[cfg(windows)]
+        // `cmd /C` must receive the command as raw text. Passing it as a normal
+        // argument makes Rust quote the whole string, and cmd then mangles the
+        // quotes inside it (`del "C:\\a b.txt"` failed with "filename,
+        // directory name, or volume label syntax is incorrect").
+        let mut child = {
+            use std::os::windows::process::CommandExt as _;
             let mut cmd = tokio::process::Command::new("cmd");
-            cmd.arg("/C").arg(command);
+            cmd.arg("/C");
+            cmd.as_std_mut().raw_arg(command);
             cmd
-        } else {
+        };
+        #[cfg(not(windows))]
+        let mut child = {
             let mut sh = tokio::process::Command::new("sh");
             sh.arg("-c").arg(command);
             sh
