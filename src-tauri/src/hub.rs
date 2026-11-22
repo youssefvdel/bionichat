@@ -86,6 +86,8 @@ fn preview_of(text: &str, limit: usize) -> String {
 
 struct PublishedImage {
     token: String,
+    /// The file name the URL ends with, for humans reading the link.
+    #[allow(dead_code)]
     name: String,
     mime: String,
     /// Base64 as the tool produced it; decoded only when someone fetches it.
@@ -515,10 +517,10 @@ impl Hub {
         let mut candidates: Vec<(String, String)> = Vec::new();
         for spec in &registry.servers {
             let prefix = format!("{}_", spec.namespace());
-            if let Some(tool) = name.strip_prefix(&prefix) {
-                if !tool.is_empty() {
-                    candidates.push((spec.name.clone(), tool.to_string()));
-                }
+            if let Some(tool) = name.strip_prefix(&prefix)
+                && !tool.is_empty()
+            {
+                candidates.push((spec.name.clone(), tool.to_string()));
             }
         }
         match candidates.len() {

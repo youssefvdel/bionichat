@@ -7,11 +7,11 @@
 //!
 //! The helper runs in the foreground and this module supervises it:
 //!
-//! * start  - spawn it, read the public URL it prints, poll until the URL
-//!            answers over TLS, then keep the child alive
-//! * stop   - kill the child; the hostname stays valid for next time
+//! * start - spawn it, read the public URL it prints, poll until the URL
+//!   answers over TLS, then keep the child alive
+//! * stop - kill the child; the hostname stays valid for next time
 //! * revoke - delete the tunnel server-side, so the next start mints a new
-//!            hostname and a leaked link is dead for good
+//!   hostname and a leaked link is dead for good
 
 use std::path::PathBuf;
 use std::process::Stdio;

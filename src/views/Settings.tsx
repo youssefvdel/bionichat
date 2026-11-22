@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import type { ActivityEntry, ServerRow, Settings as AppSettings, TunnelInfo } from "../types";
+import type { ServerRow, Settings as AppSettings, TunnelInfo } from "../types";
 import { invoke } from "../tauri";
 import { Button, Panel } from "../components/ui";
 import { Pill } from "../components/chrome";
-import { LiveRail } from "../components/LiveRail";
-import { ToolFlow, type FlashState, type RunningCall } from "../components/ToolFlow";
 import { Servers } from "../components/Servers";
 
 function Tunnel({
@@ -244,10 +242,6 @@ export function Settings({
   onServers,
   approvalsDefault,
   registryPath,
-  activity,
-  running,
-  flash,
-  hubSessions,
 }: {
   tunnel: TunnelInfo;
   onTunnel: (info: TunnelInfo) => void;
@@ -255,10 +249,6 @@ export function Settings({
   onServers: (rows: ServerRow[]) => void;
   approvalsDefault: string;
   registryPath: string;
-  activity: ActivityEntry[];
-  running: RunningCall[];
-  flash: FlashState;
-  hubSessions: number;
 }) {
   const live = tunnel.status === "ready";
 
@@ -278,23 +268,6 @@ export function Settings({
         }
       >
         <Servers rows={servers} onServers={onServers} />
-      </Panel>
-
-      <Panel
-        labelledBy="tools-title"
-        title="Tools"
-        right={
-          <span className="text-[11.5px] text-dim tabular-nums">
-            {hubSessions} sessions
-          </span>
-        }
-      >
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="clay-bump min-h-[440px] overflow-hidden !p-0">
-            <ToolFlow servers={servers} flash={flash} running={running} sessions={hubSessions} />
-          </div>
-          <LiveRail running={running} activity={activity} bare />
-        </div>
       </Panel>
 
       <AddServer onServers={onServers} primary={!live} />

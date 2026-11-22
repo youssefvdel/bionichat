@@ -132,7 +132,7 @@ export function CallPreview({
       )}
 
       {shown && (
-        <div className="border-t border-rule bg-[#fafafb]">
+        <div className="border-t border-rule bg-surface/60">
           <pre className="m-0 max-h-[132px] overflow-auto px-3 py-2 font-mono text-[10.5px] leading-[1.5] whitespace-pre-wrap text-sub">
             {shown}
           </pre>

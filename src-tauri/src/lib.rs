@@ -419,10 +419,10 @@ fn set_policy(
     registry.set_policy(&server, &tool, decision);
     registry::save(&state.registry_path, &registry)?;
     let mut rows = lock_rows(&state.rows);
-    if let Some(row) = find_row(&mut rows, &server) {
-        if let Some(tool_row) = row.tools.iter_mut().find(|candidate| candidate.name == tool) {
-            tool_row.policy = decision;
-        }
+    if let Some(row) = find_row(&mut rows, &server)
+        && let Some(tool_row) = row.tools.iter_mut().find(|candidate| candidate.name == tool)
+    {
+        tool_row.policy = decision;
     }
     Ok(rows.clone())
 }
@@ -793,16 +793,15 @@ pub fn run() {
                                 ..
                             },
                         ) = (&existing.transport, &spec.transport)
+                            && !Path::new(command).exists()
                         {
-                            if !Path::new(command).exists() {
-                                log::info!("repointing {} at {fresh}", spec.name);
-                                existing.transport = registry::Transport::Stdio {
-                                    command: fresh.clone(),
-                                    args: args.clone(),
-                                    env: Default::default(),
-                                };
-                                added = true;
-                            }
+                            log::info!("repointing {} at {fresh}", spec.name);
+                            existing.transport = registry::Transport::Stdio {
+                                command: fresh.clone(),
+                                args: args.clone(),
+                                env: Default::default(),
+                            };
+                            added = true;
                         }
                     }
                     None => {
@@ -811,10 +810,11 @@ pub fn run() {
                     }
                 }
             }
-            if !registry_broken && (registry.servers.is_empty() || added) {
-                if let Err(error) = registry::save(&registry_path, &registry) {
-                    log::warn!("could not seed the registry: {error}");
-                }
+            if !registry_broken
+                && (registry.servers.is_empty() || added)
+                && let Err(error) = registry::save(&registry_path, &registry)
+            {
+                log::warn!("could not seed the registry: {error}");
             }
 
             let port = std::env::var("BIONICHAT_HUB_PORT")
@@ -866,10 +866,10 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     for attempt in 0..10 {
                         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                        if let Some(window) = handle.get_webview_window("main") {
-                            if window.show().is_ok() {
-                                return;
-                            }
+                        if let Some(window) = handle.get_webview_window("main")
+                            && window.show().is_ok()
+                        {
+                            return;
                         }
                         if attempt == 9 {
                             let _ = std::fs::write(

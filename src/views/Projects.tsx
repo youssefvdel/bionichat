@@ -141,7 +141,7 @@ export function Projects() {
       {error && (
         <p
           role="alert"
-          className="m-0 rounded-md bg-[#fdeceb] px-3 py-2 font-mono text-[11.5px] text-bad"
+          className="m-0 rounded-md bg-bad/12 px-3 py-2 font-mono text-[11.5px] text-bad"
         >
           {error}
         </p>

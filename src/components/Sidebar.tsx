@@ -25,7 +25,7 @@ export function Sidebar({
   return (
     <nav
       aria-label="Main"
-      className="flex w-[188px] shrink-0 flex-col gap-0.5 bg-[#e9e9ee] px-2.5 pt-2 pb-3"
+      className="flex w-[188px] shrink-0 flex-col gap-0.5 bg-rail px-2.5 pt-2 pb-3"
     >
       {NAV.map(({ id, label, Icon }) => (
         <button
@@ -39,7 +39,7 @@ export function Sidebar({
           <Icon />
           <span>{label}</span>
           {id === "overview" && waiting > 0 && (
-            <span className="ml-auto rounded-full bg-[#fdf4e6] px-1.5 py-0.5 font-mono text-[10px] text-warn tabular-nums">
+            <span className="ml-auto rounded-full bg-warn/15 px-1.5 py-0.5 font-mono text-[10px] text-warn tabular-nums">
               {waiting}
             </span>
           )}

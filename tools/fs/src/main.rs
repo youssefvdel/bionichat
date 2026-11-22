@@ -326,14 +326,13 @@ impl FsServer {
                 "`{requested}` is a directory"
             ))]);
         }
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                if let Err(error) = std::fs::create_dir_all(parent) {
-                    return CallToolResult::error(vec![ContentBlock::text(format!(
-                        "cannot create parent: {error}"
-                    ))]);
-                }
-            }
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+            && let Err(error) = std::fs::create_dir_all(parent)
+        {
+            return CallToolResult::error(vec![ContentBlock::text(format!(
+                "cannot create parent: {error}"
+            ))]);
         }
         match std::fs::write(&path, &content) {
             Ok(()) => CallToolResult::success(vec![ContentBlock::text(format!(

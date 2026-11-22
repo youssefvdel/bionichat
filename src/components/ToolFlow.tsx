@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo } from "react";
 import {
   Handle,
   Position,
@@ -7,6 +7,7 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { ActivityEntry, ServerRow } from "../types";
@@ -29,9 +30,9 @@ type HubData = { sessions: number; busy: boolean };
 
 const stateRing: Record<ToolState, string> = {
   idle: "",
-  running: "!ring-2 !ring-accent/70 !shadow-[0_0_0_6px_rgba(0,122,255,0.10)]",
-  ok: "!ring-2 !ring-[#b7e2c6]",
-  error: "!ring-2 !ring-[#f0bdb9]",
+  running: "!ring-2 !ring-accent/70 !shadow-[0_0_0_6px_rgba(76,157,255,0.14)]",
+  ok: "!ring-2 !ring-good/60",
+  error: "!ring-2 !ring-bad/60",
 };
 
 const ToolNode = memo(({ data }: NodeProps) => {
@@ -65,7 +66,7 @@ const ServerNode = memo(({ data }: NodeProps) => {
       <Handle type="target" position={Position.Left} className="tf-handle" />
       <span
         className={`h-2 w-2 shrink-0 rounded-full ${
-          d.status === "ready" ? "bg-good" : d.status === "error" ? "bg-bad" : "bg-[#c9c9d0]"
+          d.status === "ready" ? "bg-good" : d.status === "error" ? "bg-bad" : "bg-dim"
         }`}
       />
       <span className="truncate font-mono text-[12px] font-[600] text-ink">{d.label}</span>
@@ -136,7 +137,7 @@ function Flow({
   running: RunningCall[];
   sessions: number;
 }) {
-  const { nodes, edges, signature } = useMemo(() => {
+  const { nodes, edges, layoutKey } = useMemo(() => {
     const list = servers ?? [];
     const runningKeys = new Set(running.map((r) => r.key));
 
@@ -209,22 +210,29 @@ function Flow({
       data: { sessions, busy: running.length > 0 } satisfies HubData,
     });
 
-    const sig = JSON.stringify([
-      list.map((s) => [s.name, s.namespace, s.status, s.tools.map((t) => t.name)]),
-      running.map((r) => r.key).sort(),
-    ]);
+    // Only the shape of the graph triggers a re-fit; a call lighting up must
+    // not reset the viewport.
+    const layout = JSON.stringify(list.map((s) => [s.name, s.namespace, s.tools.map((t) => t.name)]));
 
-    return { nodes: outNodes, edges: outEdges, signature: sig };
+    return { nodes: outNodes, edges: outEdges, layoutKey: layout };
   }, [servers, flash, running, sessions]);
+
+  const flow = useReactFlow();
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      void flow.fitView({ padding: 0.14, duration: 220 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [flow, layoutKey]);
 
   return (
     <div className="h-full w-full">
       <ReactFlow
-      key={signature}
       nodes={nodes}
       edges={edges}
       fitView
-      fitViewOptions={{ padding: 0.08, duration: 0 }}
+      fitViewOptions={{ padding: 0.14 }}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       nodesDraggable={false}

@@ -111,7 +111,7 @@ export function Titlebar({ renderer }: { renderer: string }) {
       <span className="mt-px text-[11.5px] text-dim">your PC, from the chat</span>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <span className="mr-2 hidden rounded-full bg-surface px-2 py-1 font-mono text-[10px] text-dim shadow-[0_1px_2px_rgba(20,22,28,0.06)] md:inline">
+        <span className="mr-2 hidden rounded-full bg-surface px-2 py-1 font-mono text-[10px] text-dim shadow-[0_1px_2px_rgba(0,0,0,0.5)] md:inline">
           {renderer || "—"}
         </span>
         <WinButton title="Minimize" onClick={() => run("window_minimize")}>

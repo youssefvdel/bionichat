@@ -146,7 +146,7 @@ export default function App() {
         />
         <main className="min-h-0 flex-1 overflow-y-auto pr-5 pb-8">
           {loadError && (
-            <p className="mb-4 rounded-md bg-[#fdeceb] px-3 py-2 font-mono text-[11.5px] text-bad">
+            <p className="mb-4 rounded-md bg-bad/12 px-3 py-2 font-mono text-[11.5px] text-bad">
               {loadError}
             </p>
           )}
@@ -155,6 +155,11 @@ export default function App() {
               tunnel={tunnel}
               approvals={approvals}
               onApprovals={setApprovals}
+              servers={servers}
+              flash={flash}
+              running={running}
+              activity={activity}
+              sessions={hubSessions}
               onOpenSettings={() => setView("settings")}
               onOpenProjects={() => setView("projects")}
             />
@@ -168,10 +173,6 @@ export default function App() {
               onServers={setServers}
               approvalsDefault={approvalsDefault}
               registryPath={registryPath}
-              activity={activity}
-              running={running}
-              flash={flash}
-              hubSessions={hubSessions}
             />
           )}
         </main>

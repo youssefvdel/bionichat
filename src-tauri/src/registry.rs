@@ -345,7 +345,6 @@ fn string_map(value: Option<&Value>, at: &str) -> Result<BTreeMap<String, String
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     fn registry_with_builtin() -> Registry {
         Registry {

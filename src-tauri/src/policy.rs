@@ -27,7 +27,6 @@ pub fn decision(
 }
 
 /// `tools/list` and the handshake are never gated: they have no side effects.
-
 #[cfg(test)]
 mod tests {
     use super::*;

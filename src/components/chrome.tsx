@@ -2,14 +2,14 @@
    One stroke weight, one drawing style. */
 
 const tone: Record<string, string> = {
-  pending: "bg-[#fdf4e6] text-warn",
-  ready: "bg-[#e9f6ee] text-good",
-  error: "bg-[#fdeceb] text-bad",
+  pending: "bg-warn/15 text-warn",
+  ready: "bg-good/15 text-good",
+  error: "bg-bad/15 text-bad",
   starting: "bg-bump text-sub",
   off: "bg-bump text-dim",
   idle: "bg-bump text-dim",
-  ok: "bg-[#e9f6ee] text-good",
-  denied: "bg-[#fdeceb] text-bad",
+  ok: "bg-good/15 text-good",
+  denied: "bg-bad/15 text-bad",
   timeout: "bg-bump text-dim",
 };
 
