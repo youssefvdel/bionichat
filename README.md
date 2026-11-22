@@ -92,10 +92,31 @@ sudo chown root:root target/debug/chrome-sandbox
 sudo chmod 4755 target/debug/chrome-sandbox
 ```
 
-Verified 2026-11-21: the CEF build renders the full P3 dashboard (policy
-dropdowns, restart button, auto-restart toggle, approvals banner); build takes
-~4 min and an 8.1 GB `target/cef` (downloads `cef 154.5.0`). The renderer chip
-in the header shows which runtime built ("cef" or "wry").
+Verified 2026-11-22: the CEF build renders the dashboard and the live map on
+Linux and on Windows (six Chromium processes, window painting). The renderer
+chip in the header shows which runtime built ("cef" or "wry").
+
+## Package a folder
+
+```bash
+bun run package      # -> dist/bionichat-<platform>-<version>.zip
+```
+
+One archive holds the app, `fs`, `bash`, `skill`, the tunnel helper and, for a
+CEF build, Chromium's runtime (`libcef`, `.pak` files, `locales`, the sandbox
+helper). Unzip anywhere and launch; nothing to install.
+
+Measured 2026-11-22:
+
+| platform | zip | unpacked | runtime inside |
+|---|---|---|---|
+| Linux x64 | 365 MB | 1.5 GB | `libcef.so`, 221 locale files |
+| Windows x64 | 192 MB | 453 MB | `libcef.dll` 276 MB |
+
+Two traps the script now handles: a CEF runtime directory is matched by name
+(`cef_*`, `*.framework`), because cargo also drops a stray `libcef.dll` inside
+its build tree; and the staging folder lives in `target/package/`, never in
+`dist/`, which Tauri embeds as the frontend.
 
 
 ## Layout
