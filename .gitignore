@@ -5,3 +5,7 @@ dist/main.js.map
 *.log
 .DS_Store
 dist/_debug.html
+
+# packaged folders and archives
+dist/bionichat-*/
+dist/*.zip

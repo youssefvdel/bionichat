@@ -1,7 +1,8 @@
 name: windows
 
-# Windows build. Linux stays the development target; this produces the .exe
-# and an installer so the app can be tried on a real Windows machine.
+# Windows build. Linux stays the development target; this produces a runnable
+# folder (app + tool servers + tunnel helper) so the app can be tried on a
+# real Windows machine with nothing installed.
 on:
   workflow_dispatch:
   push:
@@ -24,34 +25,39 @@ jobs:
         with:
           workspaces: "src-tauri -> target"
 
-      - name: Build the UI and the tool servers
+      - name: Install UI dependencies and build the UI
         shell: bash
         run: |
           bun install --frozen-lockfile
           bun run build
-          cargo build --release --workspace --exclude bionichat
 
-      - name: Read the app version
-        id: version
+      - name: Build the tool servers
         shell: bash
-        run: echo "value=$(cargo metadata --no-deps --format-version 1 | python -c "import json,sys; print(json.load(sys.stdin)['packages'][0]['version'])")" >> "$GITHUB_OUTPUT"
+        run: cargo build --release --workspace --exclude bionichat
 
       - name: Build the app (WebView2 renderer)
         shell: bash
-        run: |
-          cargo build --release --manifest-path src-tauri/Cargo.toml
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml
 
-      - name: Collect the binary and its tools
+      - name: Put the tunnel helper beside the app
+        shell: bash
+        run: bun run tunnel:fetch
+
+      - name: Pack the runnable folder
         shell: bash
         run: |
           mkdir -p dist-windows
-          cp src-tauri/target/release/bionichat.exe dist-windows/
+          cp target/release/bionichat.exe dist-windows/
           cp target/release/fs.exe dist-windows/
           cp target/release/bash.exe dist-windows/
           cp target/release/skill.exe dist-windows/
+          cp target/release/cloudflared.exe dist-windows/
           ls -la dist-windows
+          powershell -NoProfile -Command "Compress-Archive -Path 'dist-windows\*' -DestinationPath 'bionichat-windows.zip' -Force"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: bionichat-windows-${{ steps.version.outputs.value }}
-          path: dist-windows/
+          name: bionichat-windows
+          path: |
+            dist-windows/
+            bionichat-windows.zip

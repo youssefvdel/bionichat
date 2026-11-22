@@ -61,6 +61,22 @@ Two things that bit during that first run, worth knowing:
   a new position. That is Windows-safe (`set_position`), but only the Linux
   path has been exercised.
 
+## One folder, nothing installed
+
+`bun run build` also fetches `cloudflared` for the platform and puts it beside
+the app binary, so a Windows build folder contains everything:
+
+```
+bionichat.exe      the app
+fs.exe             file tools
+bash.exe           shell tool  (cmd /C on Windows)
+skill.exe          skill loader
+cloudflared.exe    the tunnel, so the public link works with nothing installed
+```
+
+Zip that folder (`bun run package`, or `Compress-Archive`) and it runs on any
+Windows 10/11 machine as-is.
+
 ## How to get a build
 
 Two honest routes:
