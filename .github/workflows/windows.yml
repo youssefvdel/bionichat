@@ -1,8 +1,8 @@
-name: windows
+name: desktop
 
-# Windows build. Linux stays the development target; this produces a runnable
-# folder (app + tool servers + tunnel helper) so the app can be tried on a
-# real Windows machine with nothing installed.
+# Windows and macOS builds. Linux is the development target; each job produces
+# a runnable folder (app + tool servers + tunnel helper) with nothing to
+# install on the machine.
 on:
   workflow_dispatch:
   push:
@@ -10,7 +10,7 @@ on:
     tags: ["v*"]
 
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,3 +61,56 @@ jobs:
           path: |
             dist-windows/
             bionichat-windows.zip
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install UI dependencies and build the UI
+        shell: bash
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Build the tool servers
+        shell: bash
+        run: cargo build --release --workspace --exclude bionichat
+
+      - name: Build the app (WebKit renderer)
+        shell: bash
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml
+
+      - name: Put the tunnel helper beside the app
+        shell: bash
+        run: bun run tunnel:build
+
+      - name: Pack the runnable folder
+        shell: bash
+        run: |
+          mkdir -p dist-macos
+          cp src-tauri/target/release/bionichat dist-macos/
+          cp target/release/fs dist-macos/
+          cp target/release/bash dist-macos/
+          cp target/release/skill dist-macos/
+          cp target/release/bionichat-tunnel dist-macos/
+          chmod +x dist-macos/*
+          ls -la dist-macos
+          ditto -c -k --sequesterRsrc --keepParent dist-macos bionichat-macos.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bionichat-macos
+          path: |
+            dist-macos/
+            bionichat-macos.zip

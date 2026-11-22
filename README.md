@@ -33,12 +33,14 @@ through OpenTunnel:
   is dead for good.
 - The helper uses the same profile and identity directory as the upstream CLI,
   so an existing URL keeps working.
+- `BIONICHAT_TUNNEL_AUTOSTART=1` brings the link up with the app (headless
+  machines, kiosks, or a watchdog that keeps the app alive).
 
 ## Platforms
 
-Linux is the development target and the only place this has been run. Windows
-is supported in the code (see `WINDOWS.md` for what changed, what is unproven
-and how to build it). macOS has not been touched.
+Linux and Windows are built and driven end to end; macOS compiles in CI but has
+never run on a Mac. `PLATFORMS.md` has the full matrix, `WINDOWS.md` and
+`MACOS.md` the per-platform details.
 
 ## Run
 

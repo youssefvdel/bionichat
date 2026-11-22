@@ -12,7 +12,8 @@ import { join } from "node:path";
 const args = process.argv.slice(2);
 const targetFlag = args.indexOf("--target");
 const target = targetFlag === -1 ? null : args[targetFlag + 1];
-const name = target?.includes("windows") ? "bionichat-tunnel.exe" : "bionichat-tunnel";
+const isWindows = target ? target.includes("windows") : process.platform === "win32";
+const name = isWindows ? "bionichat-tunnel.exe" : "bionichat-tunnel";
 
 const cargo = ["build", "--release", "-p", "bionichat-tunnel"];
 if (target) cargo.push("--target", target);

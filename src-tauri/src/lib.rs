@@ -797,6 +797,19 @@ pub fn run() {
 
             refresh_in_background(app.handle());
             spawn_supervisor(app.handle().clone());
+
+            // Headless runs (CI, a kiosk, a machine nobody clicks) can ask for
+            // the link to come up with the app.
+            if std::env::var("BIONICHAT_TUNNEL_AUTOSTART").is_ok_and(|value| value != "0") {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let autostart = handle.state::<AppState>().tunnel.start(port).await;
+                    let _ = handle.emit("tunnel-updated", autostart.clone());
+                    if let Some(error) = &autostart.error {
+                        eprintln!("tunnel autostart: {error}");
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
