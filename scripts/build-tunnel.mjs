@@ -7,7 +7,7 @@
 //   bun run tunnel:build --target x86_64-pc-windows-gnu
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, readdirSync, chmodSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const targetFlag = args.indexOf("--target");
@@ -39,6 +39,12 @@ for (const root of ["src-tauri/target", "target"]) {
     for (const dir of dirs) {
       if (!existsSync(join(dir, appName))) continue;
       const destination = join(dir, name);
+      // When the app lives in the same folder as the build output, the helper
+      // is already in place: copying it onto itself would delete it.
+      if (resolve(destination) === resolve(built)) {
+        placed.push(destination);
+        continue;
+      }
       // A running helper holds its file open; skip it rather than fail the build.
       try {
         rmSync(destination, { force: true });

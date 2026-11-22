@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Keep the bionichat demo stack alive: the CEF app on a display.
-# DISPLAY_NUM=:0 supervises the app on the real desktop (no Xvfb there);
-# any other value also brings up an isolated Xvfb first.
+# Keep the bionichat stack alive: the CEF app on a display.
+# Defaults to an isolated Xvfb (:98) so nothing ever appears on the real
+# desktop; DISPLAY_NUM=:0 puts it on the desktop instead.
 # Safe to kill any time.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG="/tmp/opencode/bionichat-live.log"
-DISPLAY_NUM="${DISPLAY_NUM:-:0}"
+DISPLAY_NUM="${DISPLAY_NUM:-:98}"
 
 log() { echo "[$(date -u +%H:%M:%S)] keep-live: $*" >>"$LOG"; }
 

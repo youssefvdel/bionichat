@@ -11,11 +11,12 @@ One codebase, three operating systems. What is proven and what is not:
 | `bash` | `sh -c`, **proven** | `cmd /C`, **proven** | `sh -c`, untested |
 | skills | **proven** | **proven** | untested |
 | public link, stable hostname | **proven** | **proven** | untested |
+| headless, no window | **proven** | **proven** | untested |
 | renderer | CEF (v3 alpha) or wry | WebView2 (wry) | WKWebView (wry) |
 
 Linux is the development target. Windows has been built and driven end to end
-on a real machine. macOS compiles in CI and ships a folder of binaries, but no
-Mac has run it: `MACOS.md` has the first-run checklist.
+on a real machine. macOS compiles in CI and ships a folder of binaries, but no Mac has run it,
+so `MACOS.md` has the first-run checklist instead of claims.
 
 ## Same on every platform
 
@@ -26,8 +27,9 @@ Mac has run it: `MACOS.md` has the first-run checklist.
 - The public link is stable per machine: `https://<id>.opentunnel.xyz`.
 - `BIONICHAT_TUNNEL_AUTOSTART=1` brings the link up with the app, for machines
   nobody clicks.
-- `BIONICHAT_HEADLESS=1` runs with no window (server, CI, or a machine you do
-  not want a window on). Proven on Linux; the Windows run is the same code.
+- Headless is a setting (Settings → Tunnel: *Open with no window next time*),
+  stored in `settings.json`. Proven on Linux and Windows: app running, no
+  window, hub answering, the app's own helper serving the stable link.
 
 ## Differences that matter
 
