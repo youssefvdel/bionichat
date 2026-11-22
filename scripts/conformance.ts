@@ -246,6 +246,28 @@ async function main() {
     break;
   }
 
+  // 9c. Office files: text out of a docx and an xlsx, no client support needed
+  const officeCases = isWindows
+    ? [
+        { kind: "docx", path: "C:\\Users\\Administrator\\Downloads\\26CSCI05I_Report_Template_CLEAN.docx" },
+        { kind: "xlsx", path: "C:\\Users\\Administrator\\Downloads\\Audit logs\\AUDIT moodle sync app.xlsx" },
+      ]
+    : [
+        { kind: "docx", path: "/tmp/opencode/note.docx" },
+        { kind: "xlsx", path: "/tmp/opencode/marks.xlsx" },
+      ];
+  for (const office of officeCases) {
+    const doc = await call("core_read", { path: office.path });
+    const text = textOf(doc.body);
+    if (/No such file|not a file|could not be read: No such/i.test(text)) continue;
+    record(
+      `core_read reads .${office.kind} as text`,
+      text.includes(`is a ${office.kind} document`),
+      text.split("\n")[0].slice(0, 70),
+      doc.ms,
+    );
+  }
+
   // 10. Errors behave like MCP
   const unknown = await call("zzz_nope", {});
   record(
