@@ -716,7 +716,12 @@ impl Hub {
                     json!({
                         "protocolVersion": protocol,
                         "capabilities": { "tools": { "listChanged": false } },
-                        "serverInfo": { "name": "bionichat-hub", "version": env!("CARGO_PKG_VERSION") },
+                        "serverInfo": {
+                            "name": "bionichat-hub",
+                            "title": "Bionichat: your own PC, from this chat",
+                            "description": "Connects this chat to the user's own computer. Reading and writing files, running shell commands and loading skills all happen on their machine, not in the cloud. Tools are named <server>_<tool>: the built-in ones are core_read, core_write, core_edit, core_bash and core_skill, and any other prefix is an MCP server the user added.",
+                            "version": env!("CARGO_PKG_VERSION")
+                        },
                         "instructions": Self::briefing(&self.registry()),
                     }),
                 )
@@ -1222,6 +1227,28 @@ mod tests {
                 && tail.contains(" (local) = ")
                 && tail.ends_with(']'),
             "block must end with the server-time stamp, got: {tail}"
+        );
+    }
+
+    #[tokio::test]
+    async fn initialize_says_it_connects_the_user_pc() {
+        let hub = test_hub("serverinfo");
+        let (_, body) = hub
+            .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}))
+            .await;
+        let body = body.expect("init body");
+        let info = body.pointer("/result/serverInfo").expect("serverInfo");
+        let description = info
+            .pointer("/description")
+            .and_then(Value::as_str)
+            .expect("server description");
+        assert!(
+            description.contains("user's own computer"),
+            "description must name the user's PC: {description}"
+        );
+        assert!(
+            info.pointer("/title").and_then(Value::as_str).is_some(),
+            "server title"
         );
     }
 
