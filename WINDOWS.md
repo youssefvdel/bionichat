@@ -23,6 +23,11 @@ the tunnel helper) is a console program, and Windows gives each one its own
 console window. They are now spawned with `CREATE_NO_WINDOW`, so the app opens
 as one window with no terminals behind it.
 
+Verified on `youssef-pc`: enumerating the desktop's visible top-level windows
+shows `bionichat` and no console windows; the four child processes report no
+windows. (Do not trust `Process.MainWindowHandle` for a window started by the
+Task Scheduler: it reads 0 even when the window is visible.)
+
 ## What was Linux-only, now fixed
 
 - `bash` ran `sh -c`; Windows has no `sh`, so it now runs `cmd /C` there and

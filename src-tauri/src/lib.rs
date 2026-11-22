@@ -851,11 +851,30 @@ pub fn run() {
 
             // The window starts hidden so a headless run never flashes a
             // window in anyone's face; a normal launch shows it right away.
+            // The window is created hidden so a headless run never flashes
+            // one. Showing it has to wait for the runtime to be up: an
+            // immediate show() during setup is ignored by the Windows
+            // runtime, so it runs on a short delay instead.
             let headless = settings.headless || std::env::var("BIONICHAT_HEADLESS").is_ok();
             if !headless {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                }
+                let handle = app.handle().clone();
+                let note_path = data_dir.join("startup.log");
+                tauri::async_runtime::spawn(async move {
+                    for attempt in 0..10 {
+                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                        if let Some(window) = handle.get_webview_window("main") {
+                            if window.show().is_ok() {
+                                return;
+                            }
+                        }
+                        if attempt == 9 {
+                            let _ = std::fs::write(
+                                &note_path,
+                                "the main window could not be shown\n",
+                            );
+                        }
+                    }
+                });
             }
 
             // Headless runs (CI, a kiosk, a machine nobody clicks) can ask for
