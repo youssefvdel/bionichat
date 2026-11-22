@@ -5,6 +5,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
   useReactFlow,
@@ -63,7 +64,6 @@ const ServerNode = memo(({ data }: NodeProps) => {
   const d = data as unknown as ServerData;
   return (
     <div className="clay-panel flex h-[50px] w-[150px] items-center gap-2 px-3.5">
-      <Handle type="target" position={Position.Left} className="tf-handle" />
       <span
         className={`h-2 w-2 shrink-0 rounded-full ${
           d.status === "ready" ? "bg-good" : d.status === "error" ? "bg-bad" : "bg-dim"
@@ -71,33 +71,13 @@ const ServerNode = memo(({ data }: NodeProps) => {
       />
       <span className="truncate font-mono text-[12px] font-[600] text-ink">{d.label}</span>
       <span className="ml-auto shrink-0 text-[10px] text-dim tabular-nums">{d.tools}</span>
+      <Handle type="target" position={Position.Top} className="tf-handle" />
       <Handle type="source" position={Position.Bottom} className="tf-handle" />
     </div>
   );
 });
 ServerNode.displayName = "ServerNode";
 
-// Hub to server runs down a lane between columns, like a patch panel.
-const BusEdge = ({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  data,
-}: {
-  sourceX: number;
-  sourceY: number;
-  targetX: number;
-  targetY: number;
-  data?: Record<string, unknown>;
-}) => {
-  const lane = typeof data?.lane === "number" ? data.lane : targetX - 8;
-  const drop = sourceY + 14;
-  const d = `M ${sourceX},${sourceY} L ${sourceX},${drop} L ${lane},${drop} L ${lane},${targetY} L ${targetX},${targetY}`;
-  return <path d={d} className="react-flow__edge-path" fill="none" />;
-};
-
-const edgeTypes = { bus: BusEdge };
 
 const HubNode = memo(({ data }: NodeProps) => {
   const d = data as unknown as HubData;
@@ -116,7 +96,19 @@ const HubNode = memo(({ data }: NodeProps) => {
 });
 HubNode.displayName = "HubNode";
 
+// A server sits straight above its tools, so a plain bezier would be a ruler
+// line. One lateral bow keeps every wire soft.
+const CurveEdge = ({ id, sourceX, sourceY, targetX, targetY, selected }: EdgeProps) => {
+  const bend = 14;
+  const lift = Math.max((targetY - sourceY) * 0.55, 12);
+  // Leave the source straight down and arrive straight into the handle: only
+  // the middle bows, so no hook appears at either end.
+  const path = `M ${sourceX},${sourceY} C ${sourceX},${sourceY + lift} ${targetX + bend},${targetY - lift} ${targetX},${targetY}`;
+  return <path id={id} d={path} className={`react-flow__edge-path${selected ? " selected" : ""}`} fill="none" />;
+};
+
 const nodeTypes = { tool: ToolNode, server: ServerNode, hub: HubNode };
+const edgeTypes = { curve: CurveEdge };
 
 const COL = 164; // one server column, edge to edge
 const X0 = 26; // left margin, room for the bus lanes
@@ -178,6 +170,7 @@ function Flow({
             id: `e-${key}`,
             source: `srv-${server.name}`,
             target: `tool-${key}`,
+            type: "curve",
             animated: isRunning,
             className: isRunning ? "tf-edge tf-edge-live" : "tf-edge",
           });
@@ -194,8 +187,7 @@ function Flow({
           id: `e-hub-${server.name}`,
           source: "hub",
           target: `srv-${server.name}`,
-          type: "bus",
-          data: { lane: colX - 13 },
+          type: "default",
           animated: busy,
           className: busy ? "tf-edge tf-edge-live" : "tf-edge",
         });
@@ -234,8 +226,8 @@ function Flow({
       fitView
       fitViewOptions={{ padding: 0.14 }}
       nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
       nodesDraggable={false}
+      edgeTypes={edgeTypes}
       nodesConnectable={false}
       elementsSelectable={false}
       minZoom={0.4}

@@ -32,7 +32,10 @@ if (!build) throw new Error("no build found under target/ or src-tauri/target/; 
 const { root, profile, dir: source } = build;
 console.log(`packing ${source} (${profile})`);
 
-const stage = join("dist", "bionichat-" + platform);
+// Never stage inside dist/: tauri embeds ../dist as the frontend, so a staged
+// Chromium runtime there would be baked into the next app build (and its
+// CMakeLists.txt would fail the asset read).
+const stage = join("target", "package", "bionichat-" + platform);
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
 
