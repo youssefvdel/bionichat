@@ -44,7 +44,11 @@ jobs:
 
       - name: Build the app (CEF renderer)
         shell: bash
-        run: cargo build --release -p bionichat
+        # The frontend is embedded at compile time; cargo will not notice that
+        # dist/ changed unless the build script is touched.
+        run: |
+          touch src-tauri/build.rs
+          cargo build --release -p bionichat
 
       - name: Put the tunnel helper beside the app
         shell: bash
@@ -88,7 +92,9 @@ jobs:
 
       - name: Build the app (WKWebView: CEF on macOS is unproven here)
         shell: bash
-        run: cargo build --release -p bionichat --no-default-features --features wry
+        run: |
+          touch src-tauri/build.rs
+          cargo build --release -p bionichat --no-default-features --features wry
 
       - name: Put the tunnel helper beside the app
         shell: bash

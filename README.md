@@ -71,6 +71,14 @@ Build from the repository root so every binary lands in one `target/`; a
 `--manifest-path src-tauri/Cargo.toml` build silently creates a second
 `src-tauri/target/` and the packer then sees stale files.
 
+The frontend is embedded into the binary at compile time, and cargo does not
+notice a changed `dist/` on its own. After any UI change, touch the build
+script before building, or the app ships the previous screen:
+
+```bash
+touch src-tauri/build.rs && cargo build -p bionichat
+```
+
 `cef` and `wry` are mutually exclusive (gtk4 vs gtk3); the crate refuses to
 build with both. Windows needs Ninja on PATH (`winget install Ninja-build.Ninja`)
 and CMake (`winget install Kitware.CMake`).
