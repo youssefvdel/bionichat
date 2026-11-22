@@ -169,6 +169,12 @@ fn xlsx_text(path: &std::path::Path) -> Result<String, String> {
             }
             out.push_str(&cells.join("\t"));
             out.push('\n');
+            // A log-sized workbook can hold millions of cells; stop at the
+            // clamp instead of building the whole thing in memory first.
+            if out.len() > MAX_PDF_CHARS {
+                out.push_str("\n... (remaining rows not shown)\n");
+                return Ok(out);
+            }
         }
     }
     Ok(out)
