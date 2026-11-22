@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::io::{self, Write};
 
 use anyhow::{Context, Result};
+use std::io::IsTerminal as _;
 use opentunnel::{Client, ClientOptions, Route, Routes};
 
 struct Args {
@@ -84,6 +85,24 @@ fn main() -> Result<()> {
             );
             std::process::exit(3);
         }
+    }
+
+    // Exit with the app that started us. The app keeps our stdin pipe open;
+    // when it dies the pipe ends and this thread ends the helper, so no orphan
+    // is left holding the tunnel lock.
+    if !std::io::stdin().is_terminal() {
+        std::thread::spawn(|| {
+            use std::io::Read as _;
+            let mut sink = [0u8; 64];
+            let mut stdin = std::io::stdin();
+            loop {
+                match stdin.read(&mut sink) {
+                    Ok(0) => std::process::exit(0),
+                    Ok(_) => {}
+                    Err(_) => std::process::exit(0),
+                }
+            }
+        });
     }
 
     let runtime = tokio::runtime::Runtime::new().context("starting the async runtime")?;

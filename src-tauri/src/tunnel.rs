@@ -255,7 +255,10 @@ impl TunnelManager {
             .args(helper.start_args(hub_port))
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .stdin(Stdio::null());
+            // Piped stdin is the helper's lifeline: the pipe closes when this
+            // app dies, and the helper exits instead of lingering as an orphan
+            // that blocks the next helper from starting.
+            .stdin(Stdio::piped());
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
