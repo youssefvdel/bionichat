@@ -66,6 +66,22 @@ fn schema(properties: Value, required: &[&str]) -> Arc<Map<String, Value>> {
 /// Biggest image the tool will return; a chat client has to carry it inline.
 const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 
+/// Biggest PDF the tool will open. Text is extracted from the bytes, so this
+/// is a memory guard, not an upload limit.
+const MAX_PDF_BYTES: usize = 32 * 1024 * 1024;
+
+/// Extracted PDF text is clamped: a 500 page report would otherwise eat the
+/// whole context window in one call.
+const MAX_PDF_CHARS: usize = 60_000;
+
+fn is_pdf(path: &std::path::Path, bytes: &[u8]) -> bool {
+    bytes.starts_with(b"%PDF-")
+        || path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
+}
+
 /// MIME type for a file the model can look at, by extension.
 fn image_mime(path: &std::path::Path) -> Option<&'static str> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
@@ -102,7 +118,7 @@ impl ServerHandler for FsServer {
         Ok(ListToolsResult::with_all_items(vec![
             Tool::new(
                 "read",
-                "Read the contents of a file. Supports text files and images: an image (PNG, JPEG, GIF, WebP, BMP) is returned as an image block the model can look at, up to 8 MB. Each text line is prefixed by its 1-based line number as <line>: <content>; the prefix is for reference and is not part of the file content. Use offset and limit to read large files in sections. Prefer one larger read over many small slices, and use bash with grep to find specific content in large files.",
+                "Read the contents of a file. Supports text files, images and PDFs: an image (PNG, JPEG, GIF, WebP, BMP) is returned as an image block the model can look at, up to 8 MB. A PDF is returned as its extracted text, so any client can read it. Each text line is prefixed by its 1-based line number as <line>: <content>; the prefix is for reference and is not part of the file content. Use offset and limit to read large files in sections. Prefer one larger read over many small slices, and use bash with grep to find specific content in large files.",
                 schema(
                     json!({
                         "path": { "type": "string", "description": "File to read" },
@@ -189,6 +205,56 @@ impl FsServer {
             Ok(path) => path,
             Err(message) => return CallToolResult::error(vec![ContentBlock::text(message)]),
         };
+        // PDFs are read as text: the text layer comes out of the file itself,
+        // so any client can use it, including ones that never forward media.
+        if path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
+        {
+            return match std::fs::read(&path) {
+                Ok(bytes) if !is_pdf(&path, &bytes) => CallToolResult::error(vec![
+                    ContentBlock::text(format!("`{requested}` does not look like a PDF")),
+                ]),
+                Ok(bytes) if bytes.len() > MAX_PDF_BYTES => CallToolResult::error(vec![
+                    ContentBlock::text(format!(
+                        "`{requested}` is {} bytes, larger than the {} byte PDF limit",
+                        bytes.len(),
+                        MAX_PDF_BYTES
+                    )),
+                ]),
+                Ok(bytes) => match pdf_extract::extract_text_from_mem(&bytes) {
+                    Ok(text) if text.trim().is_empty() => CallToolResult::success(vec![
+                        ContentBlock::text(format!(
+                            "`{requested}` is a PDF ({} bytes) with no text layer: every page is a scanned image. Nothing can be read from it as text.",
+                            bytes.len()
+                        )),
+                    ]),
+                    Ok(text) => {
+                        let total = text.chars().count();
+                        let body: String = if total > MAX_PDF_CHARS {
+                            format!(
+                                "{}\n\n... (truncated: {} of {} characters shown)",
+                                text.chars().take(MAX_PDF_CHARS).collect::<String>(),
+                                MAX_PDF_CHARS,
+                                total
+                            )
+                        } else {
+                            text.trim().to_string()
+                        };
+                        CallToolResult::success(vec![ContentBlock::text(format!(
+                            "`{requested}` is a PDF ({} bytes, {} characters of text)\n\n{body}",
+                            bytes.len(),
+                            total
+                        ))])
+                    }
+                    Err(error) => CallToolResult::error(vec![ContentBlock::text(format!(
+                        "`{requested}` could not be read as a PDF: {error}"
+                    ))]),
+                },
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(format!("{error}"))]),
+            };
+        }
         if let Some(mime) = image_mime(&path) {
             return match std::fs::read(&path) {
                 Ok(bytes) if bytes.len() > MAX_IMAGE_BYTES => CallToolResult::error(vec![
