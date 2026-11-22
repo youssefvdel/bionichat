@@ -793,8 +793,13 @@ pub fn run() {
                                 ..
                             },
                         ) = (&existing.transport, &spec.transport)
-                            && !Path::new(command).exists()
+                            && Path::new(fresh).exists()
+                            && command != fresh
                         {
+                            // Built-ins live beside the app. A copy installed
+                            // somewhere else keeps its own old helpers forever
+                            // (a fresh unzip ran the previous fs), so always
+                            // follow the binary that sits next to this app.
                             log::info!("repointing {} at {fresh}", spec.name);
                             existing.transport = registry::Transport::Stdio {
                                 command: fresh.clone(),
