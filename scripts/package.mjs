@@ -1,9 +1,10 @@
-// Pack a runnable folder into one archive: the app, its tool servers and the
-// tunnel helper, all beside each other the way the app expects them.
+// Pack a runnable folder into one archive: the app, its tool servers, the
+// tunnel helper and (for a CEF build) the Chromium runtime, all beside each
+// other the way the app expects them.
 //
 //   bun run package            -> dist/bionichat-<platform>-<version>.zip
 import { execFileSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const exe = process.platform === "win32" ? ".exe" : "";
@@ -11,9 +12,25 @@ const files = ["bionichat", "fs", "bash", "skill", "bionichat-tunnel"].map((name
 const version = JSON.parse(readFileSync("package.json", "utf8")).version ?? "0.1.0";
 const platform = `${process.platform}-${process.arch}`;
 
-const candidates = ["src-tauri/target/release", "target/release", "src-tauri/target/debug", "target/debug"];
-const source = candidates.find((dir) => existsSync(join(dir, files[0])));
-if (!source) throw new Error(`no build found in ${candidates.join(", ")}; run cargo build first`);
+// Both layouts exist in the wild: the workspace target/ and a src-tauri/target/
+// left behind by a --manifest-path build. Take the newest app binary and keep
+// every other file next to it, so a stale copy can never win.
+const roots = ["target", "src-tauri/target"].filter((root) => existsSync(root));
+const builds = roots
+  .map((root) => {
+    for (const profile of ["release", "debug"]) {
+      const dir = join(root, profile);
+      if (existsSync(join(dir, files[0]))) return { root, profile, dir, at: statSync(join(dir, files[0])).mtimeMs };
+    }
+    return null;
+  })
+  .filter((build) => build !== null)
+  .sort((a, b) => b.at - a.at);
+
+const build = builds[0];
+if (!build) throw new Error("no build found under target/ or src-tauri/target/; run cargo build first");
+const { root, profile, dir: source } = build;
+console.log(`packing ${source} (${profile})`);
 
 const stage = join("dist", "bionichat-" + platform);
 rmSync(stage, { recursive: true, force: true });
@@ -27,26 +44,30 @@ for (const file of files) {
 }
 
 // A CEF build needs its Chromium runtime beside the exe: libcef, the .pak
-// resources, locales and (on Linux) the setuid sandbox helper.
-// Only the profile that produced the binaries: a debug CEF is 1.4 GB.
-const profile = source.includes("release") ? "release" : "debug";
-const cefOut = [`target/${profile}/build`, `src-tauri/target/${profile}/build`]
-  .filter((dir) => existsSync(dir))
-  .flatMap((dir) =>
-    readdirSync(dir)
-      .filter((name) => name.startsWith("cef-dll-sys-"))
-      .map((name) => join(dir, name, "out"))
-      .flatMap((out) =>
-        existsSync(out)
-          ? readdirSync(out)
-              .filter((name) => name.startsWith("cef_"))
-              .map((name) => join(out, name))
-          : [],
-      ),
-  )
-  .filter((dir) => existsSync(join(dir, "libcef.dll")) || existsSync(join(dir, "libcef.so")) || existsSync(join(dir, "Chromium Embedded Framework.framework")));
+// resources, locales and (on Linux) the setuid sandbox helper. Only the
+// profile that produced the binaries: a debug CEF is 1.4 GB.
+//
+// The build layout differs by crate version: `cef-dll-sys-<hash>/out/cef_*`
+// and `cef-dll-sys/<hash>/out/cef_*` both exist in the wild, so find the
+// library itself and take its directory instead of guessing the path.
+function findCefDir(dir, depth) {
+  if (depth > 5 || !existsSync(dir)) return null;
+  const runtime = ["libcef.dll", "libcef.so", "Chromium Embedded Framework.framework"].find((name) =>
+    existsSync(join(dir, name)),
+  );
+  if (runtime) return dir;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const found = findCefDir(join(dir, entry.name), depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
 
-for (const dir of cefOut) {
+const cefDir = findCefDir(join(root, profile, "build"), 0);
+const cefDirs = cefDir ? [cefDir] : [];
+
+for (const dir of cefDirs) {
   cpSync(dir, stage, { recursive: true, force: true });
   console.log(`packed the CEF runtime from ${dir}`);
 }

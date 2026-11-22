@@ -63,9 +63,13 @@ pixels on Linux and Windows. Building it needs a C++ chain — `cmake` and
 ~700 MB CEF download.
 
 ```bash
-cargo build            # CEF, the default
-cargo build --no-default-features --features wry   # opt-out: system webview
+cargo build -p bionichat                             # CEF, the default
+cargo build -p bionichat --no-default-features --features wry   # opt-out
 ```
+
+Build from the repository root so every binary lands in one `target/`; a
+`--manifest-path src-tauri/Cargo.toml` build silently creates a second
+`src-tauri/target/` and the packer then sees stale files.
 
 `cef` and `wry` are mutually exclusive (gtk4 vs gtk3); the crate refuses to
 build with both. Windows needs Ninja on PATH (`winget install Ninja-build.Ninja`)

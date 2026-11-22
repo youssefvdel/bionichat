@@ -44,7 +44,7 @@ jobs:
 
       - name: Build the app (CEF renderer)
         shell: bash
-        run: cargo build --release --manifest-path src-tauri/Cargo.toml
+        run: cargo build --release -p bionichat
 
       - name: Put the tunnel helper beside the app
         shell: bash
@@ -88,7 +88,7 @@ jobs:
 
       - name: Build the app (WKWebView: CEF on macOS is unproven here)
         shell: bash
-        run: cargo build --release --no-default-features --features wry --manifest-path src-tauri/Cargo.toml
+        run: cargo build --release -p bionichat --no-default-features --features wry
 
       - name: Put the tunnel helper beside the app
         shell: bash

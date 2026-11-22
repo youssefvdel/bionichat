@@ -18,7 +18,7 @@ killer="$root/target/debug/chrome-sandbox"
 
 if [[ ! -u "$helper" ]]; then
   echo "missing setuid helper: $helper" >&2
-  echo "build it first: cargo build   (CEF is the default)" >&2
+  echo "build it first: cargo build -p bionichat   (CEF is the default)" >&2
   exit 1
 fi
 
