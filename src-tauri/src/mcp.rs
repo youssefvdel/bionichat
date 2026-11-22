@@ -51,6 +51,7 @@ pub async fn connect(spec: &ServerSpec) -> Result<Client, String> {
 
     let child = which_command(command).map_err(|e| format!("cannot find `{command}`: {e}"))?;
     let child = child.configure(move |cmd| {
+        crate::hide_window(cmd);
         cmd.args(&args);
         for (key, value) in &env {
             cmd.env(key, value);

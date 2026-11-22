@@ -16,6 +16,13 @@ cannot be cross-compiled from this Linux box.
 - Data lives in Tauri's `app_data_dir` (`%APPDATA%\com.bionichat.app`), so the
   registry, projects and skills follow the platform.
 
+## No console windows
+
+The app is a GUI program but every child it starts (the four tool servers and
+the tunnel helper) is a console program, and Windows gives each one its own
+console window. They are now spawned with `CREATE_NO_WINDOW`, so the app opens
+as one window with no terminals behind it.
+
 ## What was Linux-only, now fixed
 
 - `bash` ran `sh -c`; Windows has no `sh`, so it now runs `cmd /C` there and

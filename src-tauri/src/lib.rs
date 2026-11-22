@@ -152,6 +152,19 @@ fn store_settings(path: &std::path::Path, settings: &Settings) -> Result<(), Str
     std::fs::write(path, text).map_err(|error| format!("cannot write {}: {error}", path.display()))
 }
 
+/// Children are console programs. On Windows a GUI app that spawns one gives
+/// it a console window, so four servers would open four terminals; this keeps
+/// them headless.
+pub(crate) fn hide_window(command: &mut tokio::process::Command) {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
 fn lock_rows(rows: &Mutex<Vec<ServerRow>>) -> std::sync::MutexGuard<'_, Vec<ServerRow>> {
     rows.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }

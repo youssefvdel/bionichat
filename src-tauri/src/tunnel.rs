@@ -187,6 +187,7 @@ impl TunnelManager {
             ));
         };
         let mut command = tokio::process::Command::new(&helper.path);
+        crate::hide_window(&mut command);
         command
             .arg("--revoke")
             .arg("--profile")
@@ -249,6 +250,7 @@ impl TunnelManager {
         ));
 
         let mut command = tokio::process::Command::new(&helper.path);
+        crate::hide_window(&mut command);
         command
             .args(helper.start_args(hub_port))
             .stdout(Stdio::piped())
