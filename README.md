@@ -21,8 +21,10 @@ The model key lives in `model.json` (0600) and never reaches the page.
 A chat app on the web cannot reach `127.0.0.1`, so the app publishes the hub
 through OpenTunnel:
 
-- **stable hostname per machine.** `https://<id>.opentunnel.xyz` comes from the
-  stored tunnel identity, so it survives restarts. Paste it into the chat once.
+- **stable hostname per machine.** The link is
+  `https://<id>.opentunnel.xyz/mcp` (the `/mcp` path is the endpoint a chat
+  app wants; the bare host answers 404). It comes from the stored tunnel
+  identity, so it survives restarts and you paste it into the chat once.
 - **nothing to install.** The app ships its own client, `bionichat-tunnel`,
   beside `bionichat`. Upstream `opentunnel` refuses to build outside Unix (its
   service speaks over a Unix socket), so bionichat builds the portable library

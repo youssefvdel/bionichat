@@ -41,6 +41,8 @@ function Tunnel({
 
   const busy = info.status === "starting" || starting;
   const live = info.status === "ready";
+  // Chat apps want the MCP endpoint, not the bare host.
+  const endpoint = info.public_url ? `${info.public_url.replace(/\/+$/, "")}/mcp` : null;
 
   async function run(work: Promise<TunnelInfo>) {
     setError("");
@@ -85,7 +87,7 @@ function Tunnel({
       </p>
 
       <code className="mt-2.5 block font-mono text-[15px] break-all text-ink">
-        {info.public_url ?? "no public link yet"}
+        {endpoint ?? "no public link yet"}
       </code>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -95,7 +97,7 @@ function Tunnel({
               primary={primary}
               onClick={() => {
                 void navigator.clipboard
-                  .writeText(info.public_url ?? "")
+                  .writeText(endpoint ?? "")
                   .then(() => {
                     setCopied(true);
                     window.setTimeout(() => setCopied(false), 1400);
