@@ -618,7 +618,10 @@ impl Hub {
             .map_err(|error| {
                 self.forget(&spec.name);
                 self.note(&server, &tool, &arguments, started, "error", Some(preview_of(&error, 220)));
-                (-32603, error)
+                // A tool the server does not have is a bad request, not an
+                // internal failure; agents retry differently on -32602.
+                let code = if error.contains("unknown tool") { -32602 } else { -32603 };
+                (code, error)
             })?;
         // Time-awareness: every result carries the server clock, so a
         // remote agent always knows *when* it observed something. The stamp
