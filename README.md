@@ -155,6 +155,11 @@ came from and two servers can never collide:
 - `core_read` answers images (PNG, JPEG, GIF, WebP, BMP, up to 8 MB) as an MCP
   image block next to a text line, so a vision-capable chat can look at a
   screenshot or a photo instead of being told it is binary
+- `core_read` turns documents into text on the machine, so every client can
+  use them, Gemini included: PDF (text layer, 32 MB, 60k characters), Word
+  `.docx` (paragraphs, tabs, table cells) and Excel `.xlsx`/`.xls` (one block
+  per sheet, tab-separated rows). An encrypted or renamed `.doc` is refused
+  with that reason instead of a raw zip error
 - every other server uses its own name: `context7_query-docs`
 
 A call needs no `tools/list` first: the hub resolves the prefix itself, so the

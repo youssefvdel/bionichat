@@ -95,6 +95,79 @@ fn image_mime(path: &std::path::Path) -> Option<&'static str> {
     })
 }
 
+/// Text out of a Word document: paragraphs, tabs and table cells, in order.
+/// .docx is a zip with word/document.xml inside; nothing else is needed.
+fn docx_text(bytes: &[u8]) -> Result<String, String> {
+    // A .docx that starts with the OLE header is an encrypted file, or an old
+    // .doc someone renamed; a real one is a zip and starts with PK.
+    if bytes.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) {
+        return Err(
+            "it is password protected or an old .doc renamed to .docx: encrypted Office files cannot be read"
+                .to_string(),
+        );
+    }
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|error| error.to_string())?;
+    let mut document = archive
+        .by_name("word/document.xml")
+        .map_err(|_| "not a Word document: no word/document.xml inside".to_string())?;
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut document, &mut xml).map_err(|error| error.to_string())?;
+
+    let mut reader = quick_xml::Reader::from_str(&xml);
+    let mut out = String::new();
+    let mut in_text = false;
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(event)) => match event.local_name().as_ref() {
+                b"t" => in_text = true,
+                b"tab" => out.push('\t'),
+                b"br" | b"cr" => out.push('\n'),
+                _ => {}
+            },
+            Ok(quick_xml::events::Event::End(event)) => match event.local_name().as_ref() {
+                b"t" => in_text = false,
+                b"p" => out.push('\n'),
+                b"tc" => out.push('\t'),
+                b"tr" => out.push('\n'),
+                _ => {}
+            },
+            Ok(quick_xml::events::Event::Text(text)) if in_text => {
+                if let Ok(value) = text.decode() {
+                    out.push_str(&value);
+                }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(error) => return Err(error.to_string()),
+            _ => {}
+        }
+    }
+    Ok(out)
+}
+
+/// Every sheet of an Excel workbook as rows of cells, tab separated.
+fn xlsx_text(path: &std::path::Path) -> Result<String, String> {
+    use calamine::Reader;
+    let mut workbook = calamine::open_workbook_auto(path).map_err(|error| error.to_string())?;
+    let names = workbook.sheet_names().to_owned();
+    let mut out = String::new();
+    for name in names {
+        let Ok(range) = workbook.worksheet_range(&name) else {
+            continue;
+        };
+        out.push_str(&format!("\n## {name}\n"));
+        for row in range.rows() {
+            let cells: Vec<String> = row.iter().map(|cell| cell.to_string()).collect();
+            if cells.iter().all(|cell| cell.is_empty()) {
+                continue;
+            }
+            out.push_str(&cells.join("\t"));
+            out.push('\n');
+        }
+    }
+    Ok(out)
+}
+
 fn numbered(text: &str, offset: usize) -> String {
     text.lines()
         .enumerate()
@@ -118,7 +191,7 @@ impl ServerHandler for FsServer {
         Ok(ListToolsResult::with_all_items(vec![
             Tool::new(
                 "read",
-                "Read the contents of a file. Supports text files, images and PDFs: an image (PNG, JPEG, GIF, WebP, BMP) is returned as an image block the model can look at, up to 8 MB. A PDF is returned as its extracted text, so any client can read it. Each text line is prefixed by its 1-based line number as <line>: <content>; the prefix is for reference and is not part of the file content. Use offset and limit to read large files in sections. Prefer one larger read over many small slices, and use bash with grep to find specific content in large files.",
+                "Read the contents of a file. Supports text files, images, PDFs and Office documents (.docx, .xlsx, .xls): an image (PNG, JPEG, GIF, WebP, BMP) is returned as an image block the model can look at, up to 8 MB. A PDF, Word document or Excel workbook is returned as its extracted text, so any client can read it. Each text line is prefixed by its 1-based line number as <line>: <content>; the prefix is for reference and is not part of the file content. Use offset and limit to read large files in sections. Prefer one larger read over many small slices, and use bash with grep to find specific content in large files.",
                 schema(
                     json!({
                         "path": { "type": "string", "description": "File to read" },
@@ -255,6 +328,50 @@ impl FsServer {
                 Err(error) => CallToolResult::error(vec![ContentBlock::text(format!("{error}"))]),
             };
         }
+        let extension = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_ascii_lowercase())
+            .unwrap_or_default();
+
+        if extension == "docx" || extension == "xlsx" || extension == "xls" {
+            let extracted = match std::fs::read(&path) {
+                Ok(bytes) if bytes.len() > MAX_PDF_BYTES => Err(format!(
+                    "`{requested}` is {} bytes, larger than the {} byte document limit",
+                    bytes.len(),
+                    MAX_PDF_BYTES
+                )),
+                Ok(bytes) if extension == "docx" => docx_text(&bytes),
+                Ok(_) => xlsx_text(&path),
+                Err(error) => Err(error.to_string()),
+            };
+            return match extracted {
+                Ok(text) if text.trim().is_empty() => CallToolResult::success(vec![
+                    ContentBlock::text(format!("`{requested}` contains no text")),
+                ]),
+                Ok(text) => {
+                    let total = text.chars().count();
+                    let body: String = if total > MAX_PDF_CHARS {
+                        format!(
+                            "{}\n\n... (truncated: {} of {} characters shown)",
+                            text.chars().take(MAX_PDF_CHARS).collect::<String>(),
+                            MAX_PDF_CHARS,
+                            total
+                        )
+                    } else {
+                        text.trim().to_string()
+                    };
+                    CallToolResult::success(vec![ContentBlock::text(format!(
+                        "`{requested}` is a {extension} document ({} characters of text)\n\n{body}",
+                        total
+                    ))])
+                }
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(format!(
+                    "`{requested}` could not be read: {error}"
+                ))]),
+            };
+        }
+
         if let Some(mime) = image_mime(&path) {
             return match std::fs::read(&path) {
                 Ok(bytes) if bytes.len() > MAX_IMAGE_BYTES => CallToolResult::error(vec![
