@@ -11,6 +11,7 @@ export interface ToolInfo {
 
 export interface ServerRow {
   name: string;
+  namespace: string;
   transport: string;
   secret_keys: string[];
   autorestart: boolean;
@@ -81,24 +82,4 @@ export interface Dashboard {
   approvals_default: string;
   renderer: string;
   registry_path: string;
-}
-
-export interface ModelView {
-  base_url: string;
-  model: string;
-  key_hint: string;
-  configured: boolean;
-}
-
-export interface ChatCall {
-  name: string;
-  arguments: Record<string, unknown>;
-  result: string;
-  ok: boolean;
-}
-
-export interface ChatTurn {
-  role: "user" | "assistant";
-  content: string;
-  calls: ChatCall[];
 }

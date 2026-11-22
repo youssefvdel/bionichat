@@ -77,6 +77,25 @@ tools/skill               MCP server: skill (list + read from .agents/skills)
 dist/                     bun run build output
 ```
 
+## Tool names
+
+Every tool is namespaced by its server, so a name never lies about where it
+came from and two servers can never collide:
+
+- built-ins share the `core` namespace: `core_read`, `core_write`,
+  `core_edit`, `core_bash`, `core_skill`
+- every other server uses its own name: `context7_query-docs`
+
+A call needs no `tools/list` first: the hub resolves the prefix itself, so the
+first call after a restart is as fast as the tenth. Listings answer from the
+last known listing, so a slow server (anything behind `npx`) cannot stall an
+agent's first call.
+
+Servers are added and removed from Settings → Servers. Removing one drops its
+process, its tools and its stored policies. A registry file that will not
+parse is never overwritten: the app keeps a `.bad-<epoch>` copy and refuses to
+reseed over it.
+
 ## The live map
 
 Settings → Tools draws the hub, every server and every tool as a graph, and

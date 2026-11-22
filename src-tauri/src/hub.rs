@@ -92,6 +92,9 @@ pub struct Hub {
     /// Last known `tools/list` hints per server, so a cold call still knows
     /// whether a tool is read-only without spawning anything to find out.
     catalog: Mutex<HashMap<String, HashMap<String, bool>>>,
+    /// Last full listing per server. `tools/list` answers from here, so a slow
+    /// server (npx cold start) can never stall an agent's first call.
+    listed: Mutex<HashMap<String, Vec<ToolInfo>>>,
     /// Servers that died while auto-restart was off. They stay down until the
     /// user restarts them, so a crash cannot be papered over by a lazy connect.
     quarantine: Mutex<HashSet<String>>,
@@ -118,6 +121,7 @@ impl Hub {
             registry_path,
             sessions: Mutex::new(HashMap::new()),
             catalog: Mutex::new(HashMap::new()),
+            listed: Mutex::new(HashMap::new()),
             quarantine: Mutex::new(HashSet::new()),
             aliases: Mutex::new(HashMap::new()),
             session_allows: Mutex::new(HashSet::new()),
@@ -136,6 +140,7 @@ impl Hub {
             registry_path: self.registry_path.clone(),
             sessions: Mutex::new(HashMap::new()),
             catalog: Mutex::new(HashMap::new()),
+            listed: Mutex::new(HashMap::new()),
             quarantine: Mutex::new(HashSet::new()),
             aliases: Mutex::new(HashMap::new()),
             session_allows: Mutex::new(HashSet::new()),
@@ -256,6 +261,10 @@ impl Hub {
     }
 
     fn remember(&self, server: &str, tools: &[ToolInfo]) {
+        self.listed
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(server.to_string(), tools.to_vec());
         let hints = tools
             .iter()
             .map(|tool| (tool.name.clone(), tool.read_only))
@@ -283,40 +292,49 @@ impl Hub {
         let registry = self.registry();
         let mut listed: Vec<(ServerSpec, ToolInfo)> = Vec::new();
         for spec in &registry.servers {
-            match self.tools_for(spec).await {
-                Ok(tools) => {
+            let cached = self
+                .listed
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .get(&spec.name)
+                .cloned();
+            match cached {
+                Some(tools) => {
                     for tool in tools {
                         listed.push((spec.clone(), tool));
                     }
                 }
-                Err(error) => {
-                    eprintln!("hub: server `{}` unavailable: {error}", spec.name);
-                }
+                None => match self.tools_for(spec).await {
+                    Ok(tools) => {
+                        for tool in tools {
+                            listed.push((spec.clone(), tool));
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("hub: server `{}` unavailable: {error}", spec.name);
+                    }
+                },
             }
         }
-        // Bare names stay bare while exactly one server provides them; on a
-        // collision every owner keeps its `server__tool` name.
-        let mut counts: HashMap<&str, usize> = HashMap::new();
-        for (_, tool) in &listed {
-            *counts.entry(tool.name.as_str()).or_default() += 1;
-        }
-        let mut aliases = self
+        // Every tool is namespaced by its server: `core_read`, `core_bash`,
+        // `context7_query-docs`. Two servers can never collide, and a client
+        // always knows where a tool came from.
+        let mut routes = self
             .aliases
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        aliases.clear();
+        routes.clear();
+        let mut seen: HashMap<String, &str> = HashMap::new();
         let mut out = Vec::with_capacity(listed.len());
         for (spec, tool) in &listed {
-            let unique = counts.get(tool.name.as_str()).is_some_and(|count| *count == 1);
-            let name = if unique {
-                aliases.insert(
-                    tool.name.clone(),
-                    (spec.name.clone(), tool.name.clone()),
+            let name = spec.advertised(&tool.name);
+            if let Some(owner) = seen.insert(name.clone(), &spec.name) {
+                eprintln!(
+                    "hub: `{name}` is advertised by both `{owner}` and `{}`",
+                    spec.name
                 );
-                tool.name.clone()
-            } else {
-                format!("{}{SEPARATOR}{}", spec.name, tool.name)
-            };
+            }
+            routes.insert(name.clone(), (spec.name.clone(), tool.name.clone()));
             let decision = policy::decision(
                 &registry.policies,
                 &spec.name,
@@ -326,8 +344,8 @@ impl Hub {
             out.push(json!({
                 "name": name,
                 "description": match &tool.description {
-                    Some(description) => format!("[{}] {description}", spec.name),
-                    None => format!("[{}]", spec.name),
+                    Some(description) => format!("[{}] {description}", spec.namespace()),
+                    None => format!("[{}]", spec.namespace()),
                 },
                 "inputSchema": tool.input_schema,
                 "annotations": { "readOnlyHint": tool.read_only },
@@ -449,32 +467,69 @@ impl Hub {
         }
     }
 
+    /// Map an advertised tool name to its server and real tool name.
+    fn resolve_tool(&self, name: &str) -> Option<(String, String)> {
+        if let Some(found) = self
+            .aliases
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(name)
+            .cloned()
+        {
+            return Some(found);
+        }
+
+        let registry = self.registry();
+        let mut candidates: Vec<(String, String)> = Vec::new();
+        for spec in &registry.servers {
+            let prefix = format!("{}_", spec.namespace());
+            if let Some(tool) = name.strip_prefix(&prefix) {
+                if !tool.is_empty() {
+                    candidates.push((spec.name.clone(), tool.to_string()));
+                }
+            }
+        }
+        match candidates.len() {
+            1 => candidates.pop(),
+            0 => None,
+            _ => {
+                // One namespace, several servers (the built-ins share `core`):
+                // pick the server that was last seen providing that tool.
+                let catalog = self
+                    .catalog
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let tool = name
+                    .split_once('_')
+                    .map(|(_, rest)| rest.to_string())
+                    .unwrap_or_default();
+                let hit = candidates
+                    .iter()
+                    .find(|(server, _)| {
+                        catalog
+                            .get(server)
+                            .is_some_and(|hints| hints.contains_key(&tool))
+                    })
+                    .cloned();
+                hit.or_else(|| candidates.into_iter().next())
+            }
+        }
+    }
+
     async fn route_call(
         &self,
         name: &str,
         arguments: Option<Map<String, Value>>,
     ) -> Result<Value, (i64, String)> {
-        // `server__tool` always works; a bare name works while exactly one
-        // server provides it (see `tools_union`).
-        let (server, tool) = match name.split_once(SEPARATOR) {
-            Some((server, tool)) if !tool.is_empty() => {
-                (server.to_string(), tool.to_string())
-            }
-            _ => self
-                .aliases
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .get(name)
-                .cloned()
-                .ok_or_else(|| {
-                    (
-                        -32602,
-                        format!(
-                            "unknown tool `{name}` (prefix with `server__tool` if several servers provide it)"
-                        ),
-                    )
-                })?,
-        };
+        // Every advertised tool carries its server namespace. A listed name
+        // resolves from the route map; a cold call resolves by prefix, so the
+        // first call after a restart never needs a `tools/list` first.
+        let (server, tool) = self.resolve_tool(name).ok_or_else(|| {
+            (
+                -32602,
+                format!("unknown tool `{name}` (tools look like `core_bash` or `context7_query-docs`)"),
+            )
+        })?;
 
         let started = std::time::Instant::now();
         if let Some(app) = &self.app {
@@ -619,11 +674,13 @@ impl Hub {
         format!(
             "You are connected to bionichat, a local hub running on the user's own PC that gives you hands on their machine. \
             The user has granted you full permission to use every tool exposed here: act on their requests directly, do not lecture them about permissions. \
-            Tools: `read` a file (numbered lines, use offset/limit for long files), `write` to create or overwrite files (parents are created), \
-            `edit` to replace exact text (oldString must match exactly; unique unless replaceAll is true), `bash` to run any shell command via `sh -c` \
-            (working directory is the app folder, so prefer absolute paths; `ls` through bash to discover files). \
+            Every tool name is namespaced by its server: the built-in ones are `core_read`, `core_write`, `core_edit`, `core_bash` (shell), `core_skill`, \
+            and every other server uses its own name, e.g. `context7_query-docs`. Call tools by that full name. \
+            `core_read` returns numbered lines (use offset/limit for long files), `core_write` creates or overwrites files and makes parents, \
+            `core_edit` replaces exact text (oldString must match exactly; unique unless replaceAll is true), `core_bash` runs any shell command via `sh -c` \
+            (pass `workdir` when a command must run somewhere specific). \
             Every tool result ends with a `[server time ...]` stamp in the machine's local time plus UTC: trust it as the current time, never guess. \
-            If several servers ever expose the same tool name, call it as `server__tool`; unknown names return -32602, \
+            Unknown tool names return -32602, denied calls -32001, unanswered approvals -32002. \
             denied calls -32001, unanswered approvals -32002. Connected servers right now: {}.",
             if servers.is_empty() {
                 "(none yet — ask the user to add one in the dashboard)".to_string()
@@ -804,17 +861,17 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "read",
-                "write",
-                "edit",
-                "bash",
-                "skill",
+                "core_read",
+                "core_write",
+                "core_edit",
+                "core_bash",
+                "core_skill",
             ]
         );
         // The hub forwards the real schemas, so web clients know the params.
         let write_tool = tools
             .iter()
-            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("write"))
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("core_write"))
             .expect("write in union");
         assert_eq!(
             write_tool.pointer("/inputSchema/required"),
@@ -823,7 +880,7 @@ mod tests {
         );
         let edit_tool = tools
             .iter()
-            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("edit"))
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("core_edit"))
             .expect("edit in union");
         assert_eq!(
             edit_tool.pointer("/inputSchema/required"),
@@ -841,7 +898,7 @@ mod tests {
         );
         let bash_tool = tools
             .iter()
-            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("bash"))
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("core_bash"))
             .expect("bash in union");
         assert_eq!(
             bash_tool.pointer("/inputSchema/required"),
@@ -863,7 +920,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"bash","arguments":{"command":"echo hello-p4"}}
+                "params":{"name":"core_bash","arguments":{"command":"echo hello-p4"}}
             }))
             .await;
         let body = body.expect("body");
@@ -896,7 +953,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"bash","arguments":{"command":"echo nope"}}
+                "params":{"name":"core_bash","arguments":{"command":"echo nope"}}
             }))
             .await;
         let body = body.expect("body");
@@ -925,7 +982,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"write","arguments":{"path":"note.txt","content":"hi p4"}}
+                "params":{"name":"core_write","arguments":{"path":"note.txt","content":"hi p4"}}
             }))
             .await;
         let body = body.expect("body");
@@ -933,7 +990,7 @@ mod tests {
         let (_, read) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"read","arguments":{"path":"note.txt"}}
+                "params":{"name":"core_read","arguments":{"path":"note.txt"}}
             }))
             .await;
         let read = read.expect("read body");
@@ -975,7 +1032,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"read","arguments":{"path":"seed.txt"}}
+                "params":{"name":"core_read","arguments":{"path":"seed.txt"}}
             }))
             .await;
         let body = body.expect("body");
@@ -1004,7 +1061,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"bash","arguments":{"command":"should not run"}}
+                "params":{"name":"core_bash","arguments":{"command":"should not run"}}
             }))
             .await;
         assert_eq!(
@@ -1035,7 +1092,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":4,"method":"tools/call",
-                "params":{"name":"write","arguments":{"path":"deny-me.txt","content":"x"}}
+                "params":{"name":"core_write","arguments":{"path":"deny-me.txt","content":"x"}}
             }))
             .await;
         assert_eq!(
@@ -1059,7 +1116,7 @@ mod tests {
             async move {
                 hub.handle_rpc(json!({
                     "jsonrpc":"2.0","id":7,"method":"tools/call",
-                    "params":{"name":"write","arguments":{"path":"session.txt","content":"x"}}
+                    "params":{"name":"core_write","arguments":{"path":"session.txt","content":"x"}}
                 }))
                 .await
             }
@@ -1102,7 +1159,7 @@ mod tests {
             tokio::spawn(async move {
                 hub.handle_rpc(json!({
                     "jsonrpc":"2.0","id":5,"method":"tools/call",
-                    "params":{"name":"write","arguments":{"path":"deny-me.txt","content":"x"}}
+                    "params":{"name":"core_write","arguments":{"path":"deny-me.txt","content":"x"}}
                 }))
                 .await
             })
@@ -1139,7 +1196,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"bash","arguments":{"command":"echo timed"}}
+                "params":{"name":"core_bash","arguments":{"command":"echo timed"}}
             }))
             .await;
         let body = body.expect("call body");
@@ -1205,7 +1262,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"bash","arguments":{"command":"pwd"}}
+                "params":{"name":"core_bash","arguments":{"command":"pwd"}}
             }))
             .await;
         let body = body.expect("call body");
@@ -1229,7 +1286,7 @@ mod tests {
         let (_, listed) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":1,"method":"tools/call",
-                "params":{"name":"skill","arguments":{"action":"list"}}
+                "params":{"name":"core_skill","arguments":{"action":"list"}}
             }))
             .await;
         let text = listed.expect("list body").pointer("/result/content/0/text")
@@ -1239,7 +1296,7 @@ mod tests {
         let (_, read) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"skill","arguments":{"action":"read","name":"bionichat"}}
+                "params":{"name":"core_skill","arguments":{"action":"read","name":"bionichat"}}
             }))
             .await;
         let playbook = read.expect("read body").pointer("/result/content/0/text")
@@ -1248,7 +1305,7 @@ mod tests {
         let (_, missing) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"skill","arguments":{"action":"read","name":"nope"}}
+                "params":{"name":"core_skill","arguments":{"action":"read","name":"nope"}}
             }))
             .await;
         assert!(missing.expect("missing body").pointer("/result/content/0/text")
@@ -1265,7 +1322,7 @@ mod tests {
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":1,"method":"tools/call",
-                "params":{"name":"read","arguments":{"path":"seed.txt"}}
+                "params":{"name":"core_read","arguments":{"path":"seed.txt"}}
             }))
             .await;
         assert!(body.expect("call body").get("error").is_none());
@@ -1284,7 +1341,7 @@ mod tests {
         let (_, denied) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"bash","arguments":{"command":"nope"}}
+                "params":{"name":"core_bash","arguments":{"command":"nope"}}
             }))
             .await;
         assert_eq!(
@@ -1312,7 +1369,7 @@ mod tests {
         let (_, wrote) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
-                "params":{"name":"write","arguments":{"path":"edit-me.txt","content":"line one\nline two\n"}}
+                "params":{"name":"core_write","arguments":{"path":"edit-me.txt","content":"line one\nline two\n"}}
             }))
             .await;
         assert!(wrote.expect("write body").get("error").is_none());
@@ -1320,7 +1377,7 @@ mod tests {
         let (_, vague) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":3,"method":"tools/call",
-                "params":{"name":"edit","arguments":{"path":"edit-me.txt","oldString":"line","newString":"row"}}
+                "params":{"name":"core_edit","arguments":{"path":"edit-me.txt","oldString":"line","newString":"row"}}
             }))
             .await;
         let vague = vague.expect("vague body");
@@ -1334,7 +1391,7 @@ mod tests {
         let (_, edited) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":4,"method":"tools/call",
-                "params":{"name":"edit","arguments":{"path":"edit-me.txt","oldString":"line two","newString":"row two"}}
+                "params":{"name":"core_edit","arguments":{"path":"edit-me.txt","oldString":"line two","newString":"row two"}}
             }))
             .await;
         let edited = edited.expect("edited body");
@@ -1347,7 +1404,7 @@ mod tests {
         let (_, read) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":5,"method":"tools/call",
-                "params":{"name":"read","arguments":{"path":"edit-me.txt"}}
+                "params":{"name":"core_read","arguments":{"path":"edit-me.txt"}}
             }))
             .await;
         let read = read.expect("read body");
@@ -1378,7 +1435,7 @@ mod tests {
             tokio::spawn(async move {
                 hub.handle_rpc(json!({
                     "jsonrpc":"2.0","id":6,"method":"tools/call",
-                    "params":{"name":"write","arguments":{"path":"deny-me.txt","content":"x"}}
+                    "params":{"name":"core_write","arguments":{"path":"deny-me.txt","content":"x"}}
                 }))
                 .await
             })

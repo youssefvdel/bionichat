@@ -11,6 +11,7 @@ if (!js || !css) throw new Error("run vite build first");
 const servers = [
   {
     name: "fs",
+    namespace: "core",
     transport: "stdio · /home/youssefvdel/Projects/web-agent/target/debug/fs",
     secret_keys: [],
     autorestart: false,
@@ -24,6 +25,7 @@ const servers = [
   },
   {
     name: "bash",
+    namespace: "core",
     transport: "stdio · /home/youssefvdel/Projects/web-agent/target/debug/bash",
     secret_keys: [],
     autorestart: false,
@@ -35,6 +37,7 @@ const servers = [
   },
   {
     name: "skill",
+    namespace: "core",
     transport: "stdio · /home/youssefvdel/Projects/web-agent/target/debug/skill",
     secret_keys: [],
     autorestart: false,

@@ -1,6 +1,6 @@
 import { Mark, OverviewIcon, ProjectsIcon, SettingsIcon } from "./chrome";
 
-export type View = "overview" | "projects" | "chat" | "settings";
+export type View = "overview" | "projects" | "settings";
 
 const NAV: Array<{
   id: View;
@@ -32,8 +32,8 @@ export function Sidebar({
           key={id}
           type="button"
           className="clay-nav-item"
-          data-active={view === id || (id === "projects" && view === "chat")}
-          aria-current={view === id || (id === "projects" && view === "chat") ? "page" : undefined}
+          data-active={view === id}
+          aria-current={view === id ? "page" : undefined}
           onClick={() => onView(id)}
         >
           <Icon />

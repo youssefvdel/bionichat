@@ -56,11 +56,28 @@ pub enum Decision {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerSpec {
     pub name: String,
+    /// The tool namespace this server advertises (`core_read`). Defaults to
+    /// the server name, so a server called context7 gives `context7_query-docs`.
+    /// Built-in tools share one namespace, `core`.
+    #[serde(default)]
+    pub namespace: Option<String>,
     /// Restart the crashed server automatically (max 3 backoff attempts).
     #[serde(default)]
     pub autorestart: bool,
     #[serde(flatten)]
     pub transport: Transport,
+}
+
+impl ServerSpec {
+    /// The namespace tools are advertised under.
+    pub fn namespace(&self) -> &str {
+        self.namespace.as_deref().unwrap_or(&self.name)
+    }
+
+    /// The advertised name for one of its tools, e.g. `core_bash`.
+    pub fn advertised(&self, tool: &str) -> String {
+        format!("{}_{tool}", self.namespace())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,7 +123,25 @@ impl Registry {
 
 pub fn load(path: &Path) -> Option<Registry> {
     let text = fs::read_to_string(path).ok()?;
-    serde_json::from_str(&text).ok()
+    match serde_json::from_str(&text) {
+        Ok(registry) => Some(registry),
+        Err(error) => {
+            // Never lose a user's servers to a bad edit: keep the broken file
+            // beside the original and say so, instead of silently reseeding.
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or_default();
+            let backup = path.with_extension(format!("json.bad-{stamp}"));
+            let _ = fs::copy(path, &backup);
+            eprintln!(
+                "registry: {} is not valid JSON ({error}); kept a copy at {}",
+                path.display(),
+                backup.display()
+            );
+            None
+        }
+    }
 }
 
 pub fn save(path: &Path, registry: &Registry) -> Result<(), String> {
@@ -122,6 +157,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
     vec![
         ServerSpec {
             name: "fs".into(),
+            namespace: Some("core".into()),
             autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("fs").display().to_string(),
@@ -131,6 +167,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
         },
         ServerSpec {
             name: "bash".into(),
+            namespace: Some("core".into()),
             autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("bash").display().to_string(),
@@ -140,6 +177,7 @@ pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec
         },
         ServerSpec {
             name: "skill".into(),
+            namespace: Some("core".into()),
             autorestart: false,
             transport: Transport::Stdio {
                 command: exe_dir.join("skill").display().to_string(),
@@ -224,6 +262,7 @@ pub fn parse_anthropic(input: &str) -> Result<Vec<ServerSpec>, String> {
 
         specs.push(ServerSpec {
             name: name.to_string(),
+            namespace: None,
             autorestart: false,
             transport,
         });

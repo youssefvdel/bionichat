@@ -167,7 +167,7 @@ function Flow({
             type: "tool",
             position: { x: toolX, y: rowY + 78 + i * TOOL_PITCH },
             data: {
-            label: tool.name,
+            label: `${server.namespace}_${tool.name}`,
             readOnly: tool.read_only,
             state,
             hint: tool.description ?? tool.name,
@@ -210,7 +210,7 @@ function Flow({
     });
 
     const sig = JSON.stringify([
-      list.map((s) => [s.name, s.status, s.tools.map((t) => t.name)]),
+      list.map((s) => [s.name, s.namespace, s.status, s.tools.map((t) => t.name)]),
       running.map((r) => r.key).sort(),
     ]);
 

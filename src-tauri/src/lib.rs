@@ -1,7 +1,6 @@
 //! bionichat shell: dashboard over an MCP registry, the local hub that
 //! aggregates every registered server, approval policy, and supervision.
 
-mod chat;
 mod hub;
 mod mcp;
 mod policy;
@@ -72,6 +71,8 @@ impl ToolRow {
 #[derive(Debug, Clone, Serialize)]
 struct ServerRow {
     name: String,
+    /// The prefix its tools are advertised under (`core` for the built-ins).
+    namespace: String,
     transport: String,
     secret_keys: Vec<String>,
     autorestart: bool,
@@ -84,6 +85,7 @@ impl ServerRow {
     fn pending(spec: &ServerSpec) -> Self {
         Self {
             name: spec.name.clone(),
+            namespace: spec.namespace().to_string(),
             transport: spec.transport.label(),
             secret_keys: spec.transport.secret_keys(),
             autorestart: spec.autorestart,
@@ -117,7 +119,6 @@ struct Dashboard {
 struct AppState {
     registry_path: PathBuf,
     projects_path: PathBuf,
-    chat: Arc<chat::Chat>,
     hub: Arc<Hub>,
     tunnel: TunnelManager,
     rows: Mutex<Vec<ServerRow>>,
@@ -193,55 +194,6 @@ fn store_rows(state: &AppState, rows: Vec<ServerRow>) {
 
 fn find_row<'a>(rows: &'a mut [ServerRow], name: &str) -> Option<&'a mut ServerRow> {
     rows.iter_mut().find(|row| row.name == name)
-}
-
-#[tauri::command]
-fn model_config(state: State<'_, AppState>) -> chat::ModelView {
-    state.chat.config().view()
-}
-
-/// Save the endpoint and model. An empty key keeps the stored one, so the UI
-/// can edit the URL without ever holding the secret.
-#[tauri::command]
-fn save_model(
-    base_url: String,
-    model: String,
-    api_key: Option<String>,
-    state: State<'_, AppState>,
-) -> Result<chat::ModelView, String> {
-    let mut config = state.chat.config();
-    config.base_url = base_url.trim().to_string();
-    config.model = model.trim().to_string();
-    if let Some(key) = api_key {
-        let key = key.trim().to_string();
-        if !key.is_empty() {
-            config.api_key = key;
-        }
-    }
-    if config.base_url.is_empty() {
-        return Err("the base URL is required".to_string());
-    }
-    if config.model.is_empty() {
-        return Err("the model name is required".to_string());
-    }
-    state.chat.save(&config)
-}
-
-#[tauri::command]
-async fn chat_send(
-    project: String,
-    history: Vec<chat::ChatTurn>,
-    prompt: String,
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<chat::ChatTurn, String> {
-    let chat = state.chat.clone();
-    let emitter = app.clone();
-    chat.send(&project, &history, &prompt, |event, payload| {
-        use tauri::Emitter;
-        let _ = emitter.emit(event, payload);
-    })
-    .await
 }
 
 /// A folder the user chose to work in.
@@ -394,6 +346,28 @@ async fn add_servers(json: String, state: State<'_, AppState>) -> Result<Vec<Ser
     }
     registry::save(&state.registry_path, &registry)?;
     let rows = probe_all(&state).await;
+    store_rows(&state, rows.clone());
+    Ok(rows)
+}
+
+/// Drop a server for good: its process, its tools, its stored policies.
+#[tauri::command]
+fn remove_server(name: String, state: State<'_, AppState>) -> Result<Vec<ServerRow>, String> {
+    let mut registry = state.hub.registry();
+    let before = registry.servers.len();
+    registry.servers.retain(|spec| spec.name != name);
+    if registry.servers.len() == before {
+        return Err(format!("no registered server `{name}`"));
+    }
+    registry.policies.retain(|key, _| !key.starts_with(&format!("{name}__")));
+    registry::save(&state.registry_path, &registry)?;
+    state.hub.release(&name);
+    state.hub.forget(&name);
+    lock_retries(&state.retries).remove(&name);
+
+    let mut rows = lock_rows(&state.rows);
+    rows.retain(|row| row.name != name);
+    let rows = rows.clone();
     store_rows(&state, rows.clone());
     Ok(rows)
 }
@@ -731,10 +705,17 @@ pub fn run() {
                 .and_then(|exe| exe.parent().map(Path::to_path_buf))
                 .ok_or("cannot locate the binary directory")?;
 
-            let mut registry = registry::load(&registry_path).unwrap_or_else(|| Registry {
-                servers: Vec::new(),
-                ..Default::default()
-            });
+            // A registry that exists but will not parse is left untouched:
+            // reseeding over it would delete the user's own servers.
+            let registry_file_exists = registry_path.exists();
+            let mut registry = match registry::load(&registry_path) {
+                Some(registry) => registry,
+                None => Registry {
+                    servers: Vec::new(),
+                    ..Default::default()
+                },
+            };
+            let registry_broken = registry_file_exists && registry.servers.is_empty();
             // New built-in tools join an existing registry; user servers win.
             // A built-in whose binary is missing is repointed at this build:
             // moving or renaming the project folder must not break the app.
@@ -742,6 +723,12 @@ pub fn run() {
             for spec in registry::default_specs(&exe_dir, &file_root, &skills_dir) {
                 match registry.servers.iter_mut().find(|s| s.name == spec.name) {
                     Some(existing) => {
+                        // Older registries predate namespaces: built-ins now
+                        // share the `core` prefix.
+                        if existing.namespace.is_none() {
+                            existing.namespace = spec.namespace.clone();
+                            added = true;
+                        }
                         if let (
                             registry::Transport::Stdio { command, .. },
                             registry::Transport::Stdio {
@@ -768,7 +755,7 @@ pub fn run() {
                     }
                 }
             }
-            if registry.servers.is_empty() || added {
+            if !registry_broken && (registry.servers.is_empty() || added) {
                 if let Err(error) = registry::save(&registry_path, &registry) {
                     log::warn!("could not seed the registry: {error}");
                 }
@@ -793,10 +780,6 @@ pub fn run() {
                 hub: hub.clone(),
                 tunnel,
                 projects_path: data_dir.join("projects.json"),
-                chat: Arc::new(chat::Chat {
-                    hub: hub.clone(),
-                    config_path: data_dir.join("model.json"),
-                }),
                 rows: Mutex::new(rows),
                 retries: Mutex::new(HashMap::new()),
             });
@@ -816,9 +799,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             dashboard,
             projects,
-            model_config,
-            save_model,
-            chat_send,
             add_project,
             remove_project,
             browse,
@@ -831,6 +811,7 @@ pub fn run() {
             resolve_approval,
             resolve_session,
             restart_server,
+            remove_server,
             tunnel_start,
             tunnel_stop,
             tunnel_revoke,

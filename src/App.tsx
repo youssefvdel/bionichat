@@ -1,25 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  ActivityEntry,
-  CallStart,
-  Dashboard,
-  Pending,
-  ProjectEntry,
-  ServerRow,
-  TunnelInfo,
-} from "./types";
+import type { ActivityEntry, CallStart, Dashboard, Pending, ServerRow, TunnelInfo } from "./types";
 import { invoke, bridge } from "./tauri";
 import { Titlebar } from "./components/Titlebar";
 import { Sidebar, type View } from "./components/Sidebar";
 import { Overview } from "./views/Overview";
 import { Projects } from "./views/Projects";
 import { Settings } from "./views/Settings";
-import { Chat } from "./views/Chat";
 import type { FlashState, RunningCall } from "./components/ToolFlow";
 
 export default function App() {
   const [view, setView] = useState<View>("overview");
-  const [project, setProject] = useState<ProjectEntry | null>(null);
   const [renderer, setRenderer] = useState("—");
   const [version, setVersion] = useState("");
   const [hubSessions, setHubSessions] = useState(0);
@@ -154,11 +144,7 @@ export default function App() {
           waiting={approvals.length}
           version={version}
         />
-        <main
-          className={`flex min-h-0 flex-1 flex-col pr-5 ${
-            view === "chat" ? "pb-5" : "overflow-y-auto pb-8"
-          }`}
-        >
+        <main className="min-h-0 flex-1 overflow-y-auto pr-5 pb-8">
           {loadError && (
             <p className="mb-4 rounded-md bg-[#fdeceb] px-3 py-2 font-mono text-[11.5px] text-bad">
               {loadError}
@@ -173,17 +159,7 @@ export default function App() {
               onOpenProjects={() => setView("projects")}
             />
           )}
-          {view === "projects" && (
-            <Projects
-              onOpen={(row) => {
-                setProject(row);
-                setView("chat");
-              }}
-            />
-          )}
-          {view === "chat" && project && (
-            <Chat project={project} onOpenSettings={() => setView("settings")} />
-          )}
+          {view === "projects" && <Projects />}
           {view === "settings" && (
             <Settings
               tunnel={tunnel}

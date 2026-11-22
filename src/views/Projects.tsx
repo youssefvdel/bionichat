@@ -104,7 +104,7 @@ function FolderPicker({
   );
 }
 
-export function Projects({ onOpen }: { onOpen: (row: ProjectEntry) => void }) {
+export function Projects() {
   const [rows, setRows] = useState<ProjectEntry[] | null>(null);
   const [error, setError] = useState("");
   const [picking, setPicking] = useState(false);
@@ -172,10 +172,7 @@ export function Projects({ onOpen }: { onOpen: (row: ProjectEntry) => void }) {
                 <span className="truncate text-[13px] font-[550] text-ink">{row.name}</span>
                 <span className="truncate font-mono text-[10.5px] text-dim">{row.path}</span>
               </span>
-              <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                <Button small primary onClick={() => onOpen(row)}>
-                  Open chat
-                </Button>
+              <span className="ml-auto shrink-0">
                 <Button small onClick={() => void remove(row.path)} title={`Remove ${row.name}`}>
                   Remove
                 </Button>

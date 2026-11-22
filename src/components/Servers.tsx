@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ServerRow, ToolInfo } from "../types";
 import { invoke } from "../tauri";
 import { Button } from "./ui";
@@ -29,10 +30,19 @@ function Server({
     onServers(await invoke<ServerRow[]>("set_autorestart", { server: row.name, enabled }));
   }
 
+  async function remove() {
+    onServers(await invoke<ServerRow[]>("remove_server", { name: row.name }));
+  }
+
   return (
     <li className="clay-bump px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="font-mono text-[13px] font-[600]">{row.name}</span>
+        {row.namespace !== row.name && (
+          <span className="rounded-full bg-ground px-2 py-0.5 font-mono text-[10px] text-dim">
+            {row.namespace}_
+          </span>
+        )}
         <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-dim">
           {row.transport}
         </span>
@@ -49,6 +59,7 @@ function Server({
           />
           auto-restart
         </label>
+        <RemoveButton name={row.name} onConfirm={() => void remove()} />
       </div>
 
       {row.error && (
@@ -67,7 +78,9 @@ function Server({
                 title={`${tool.name}${requiredList(tool)}`}
                 className="flex min-h-7 items-baseline gap-2 text-[12px]"
               >
-                <span className="font-mono text-[12px] text-ink">{tool.name}</span>
+                <span className="font-mono text-[12px] text-ink">
+                  {row.namespace}_{tool.name}
+                </span>
                 {tool.read_only && (
                   <span className="rounded-full bg-ground px-2 py-0.5 font-mono text-[10.5px] text-dim">
                     read-only
@@ -94,6 +107,30 @@ function Server({
         </details>
       )}
     </li>
+  );
+}
+
+function RemoveButton({ name, onConfirm }: { name: string; onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  return (
+    <button
+      type="button"
+      title={armed ? "Click again to remove this server and its tools" : `Remove ${name}`}
+      onClick={() => {
+        if (!armed) {
+          setArmed(true);
+          window.setTimeout(() => setArmed(false), 5000);
+          return;
+        }
+        setArmed(false);
+        onConfirm();
+      }}
+      className={`clay-button clay-button-sm shrink-0 whitespace-nowrap !px-2.5 ${
+        armed ? "!text-bad" : "text-dim"
+      }`}
+    >
+      {armed ? "Sure?" : "Remove"}
+    </button>
   );
 }
 
