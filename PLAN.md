@@ -27,6 +27,7 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - P6: live activity feed on the main page.
 - P7: data-terminal dark restyle; hub-spur logo concepts (A1 refined + power-b finalists).
 - P17a: built-in core servers are not removable (flag in the registry, guard in registry::remove with 3 tests, Remove hidden in the UI).
+- P19: bundled tunnel. `scripts/fetch-tunnel.mjs` ships cloudflared beside the app (bun run build), locate() prefers opentunnel for its stable URL and falls back to bundled cloudflared; drain fix keeps the child alive; cloudflared URL filter stops the terms link winning; TunnelInfo.kind shown in Settings. Proved: trycloudflare link served tools and core_bash, Stop killed it.
 - P18: Windows build proven on youssef-pc (release exes, hub answers, core_bash via cmd /C); portable bash + tunnel CLI, .exe lookup, WINDOWS.md + windows CI workflow. core_read returns images as MCP image blocks (8 MB cap).
 - P17: namespaced tool names (`core_*`, `<server>_*`), prefix routing with no list-first, cached listings (list 4 ms, call 6-11 ms), remove-server command + two-step button, registry parse failures keep a backup instead of reseeding. Chatbot removed.
 - P16: in-app chat: project folder, OpenAI-compatible model config, tool loop through the hub, calls rendered as terminal cards. Shell defaults to the project folder; registry self-heals when the app folder moves.

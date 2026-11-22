@@ -13,7 +13,7 @@ export default function App() {
   const [renderer, setRenderer] = useState("—");
   const [version, setVersion] = useState("");
   const [hubSessions, setHubSessions] = useState(0);
-  const [tunnel, setTunnel] = useState<TunnelInfo>({ status: "off", public_url: null, error: null });
+  const [tunnel, setTunnel] = useState<TunnelInfo>({ status: "off", public_url: null, error: null, kind: null });
   const [approvals, setApprovals] = useState<Pending[]>([]);
   const [approvalsDefault, setApprovalsDefault] = useState("ask");
   const [servers, setServers] = useState<ServerRow[] | null>(null);

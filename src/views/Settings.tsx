@@ -53,7 +53,12 @@ function Tunnel({
     <Panel
       labelledBy="tunnel-title"
       title="Tunnel"
-      right={<Pill status={busy ? "starting" : info.status} />}
+      right={
+        <span className="flex items-center gap-2">
+          {info.kind && <span className="text-[11px] text-dim">{info.kind}</span>}
+          <Pill status={busy ? "starting" : info.status} />
+        </span>
+      }
     >
       <p className="m-0 text-[12.5px] text-dim">
         {live

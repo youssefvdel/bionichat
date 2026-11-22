@@ -20,9 +20,13 @@ cannot be cross-compiled from this Linux box.
 
 - `bash` ran `sh -c`; Windows has no `sh`, so it now runs `cmd /C` there and
   keeps `sh -c` everywhere else.
-- The tunnel helper ran `opentunnel` directly. An npm install on Windows leaves
-  `opentunnel.cmd`, which `CreateProcess` cannot run, so a `.cmd`/`.bat` target
-  is launched through `cmd /C` (sync and async paths both).
+- The tunnel used to require `opentunnel`, which has no Windows build at all
+  (upstream is Rust but its service code is Linux systemd / macOS launchd, and
+  the npm package only ships linux-x64/arm64 and darwin-x64/arm64 binaries).
+  The app now ships **cloudflared** next to its own binary and uses it
+  automatically, so Windows gets a public HTTPS link with nothing installed:
+  `bun run build` downloads `cloudflared-windows-amd64.exe` into the build
+  folder before cargo runs.
 
 ## Proven on Windows (22 Nov 2026)
 
@@ -51,9 +55,8 @@ Two things that bit during that first run, worth knowing:
 - The **CEF** renderer: it declares MSVC support, but nobody has run it here.
   The realistic first run is WebView2 (`wry`), which needs the WebView2 runtime
   (preinstalled on Windows 10/11).
-- **OpenTunnel** on Windows: the CLI is cross-platform, but its background
-  service model differs from the Linux systemd user service this app was
-  tested with. Without it, the app still works on localhost only.
+- **cloudflared** on Windows: the bundled helper and the URL scrape are
+  platform-neutral, but the Windows run of the tunnel itself is untested.
 - Window drag: the custom title bar moves the window by asking the backend for
   a new position. That is Windows-safe (`set_position`), but only the Linux
   path has been exercised.

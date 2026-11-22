@@ -16,6 +16,26 @@ OpenAI-compatible model, and its tool calls go back through the same hub, so
 policies, activity and the clock behave exactly as they do for a web client.
 The model key lives in `model.json` (0600) and never reaches the page.
 
+## The public link
+
+A chat app on the web cannot reach `127.0.0.1`, so the app puts a tunnel in
+front of the hub. Two helpers, chosen automatically:
+
+| helper | URL | where it comes from |
+|---|---|---|
+| `opentunnel` | stable, one per machine | used when you already have it (Linux/macOS) |
+| `cloudflared` | fresh on every start | **ships with the app**, nothing to install |
+
+`bun run build` downloads the cloudflared binary for your platform and puts it
+beside the app binary, so a copy of the build folder needs nothing installed.
+OpenTunnel wins when present because its URL survives restarts; cloudflared is
+the zero-setup fallback. Set `BIONICHAT_TUNNEL=cloudflared` to force the
+bundled one.
+
+Stop kills the tunnel and keeps the link reusable (OpenTunnel). Revoke burns
+it: OpenTunnel deletes the route, cloudflared simply dies and the next start
+mints a new URL. Either way a leaked link cannot be reused after Revoke.
+
 ## Platforms
 
 Linux is the development target and the only place this has been run. Windows

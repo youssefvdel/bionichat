@@ -24,6 +24,8 @@ pub struct TunnelInfo {
     pub status: String,
     pub public_url: Option<String>,
     pub error: Option<String>,
+    /// `opentunnel` (stable URL) or `cloudflared` (bundled, fresh URL per run).
+    pub kind: Option<String>,
 }
 
 impl TunnelInfo {
@@ -32,6 +34,7 @@ impl TunnelInfo {
             status: "off".into(),
             public_url: None,
             error: None,
+            kind: None,
         }
     }
 
@@ -40,6 +43,7 @@ impl TunnelInfo {
             status: "error".into(),
             public_url: None,
             error: Some(message.into()),
+            kind: None,
         }
     }
 }
@@ -60,7 +64,7 @@ impl TunnelManager {
     /// Adopt a tunnel that `opentunnel` already has running (previous session,
     /// login service). Without this the app claims `off` while the URL is live.
     pub fn hydrate(&self) -> TunnelInfo {
-        let Some(binary) = locate_binary() else {
+        let Some(Flavour::OpenTunnel(binary)) = locate() else {
             return self.info();
         };
         let Ok(output) = cli(&binary).arg("status").output() else {
@@ -95,8 +99,8 @@ impl TunnelManager {
     /// good: the next start mints a fresh random route (new URL). Use this
     /// when a link leaks — plain stop keeps the same URL for next time.
     pub async fn revoke(&self) -> TunnelInfo {
-        if let (Some(binary), Some(name)) = (
-            locate_binary(),
+        if let (Some(Flavour::OpenTunnel(binary)), Some(name)) = (
+            locate(),
             self
                 .info()
                 .public_url
@@ -133,7 +137,7 @@ impl TunnelManager {
             let _ = child.start_kill();
         }
 
-        if let Some(binary) = locate_binary() {
+        if let Some(Flavour::OpenTunnel(binary)) = locate() {
             let down = cli_async(&binary).arg("down").output();
             match tokio::time::timeout(Duration::from_secs(10), down).await {
                 Ok(Ok(output)) if output.status.success() => {}
@@ -157,29 +161,27 @@ impl TunnelManager {
             status: "starting".into(),
             public_url: None,
             error: None,
+            kind: None,
         });
 
-        let binary = locate_binary();
-        let Some(binary) = binary else {
+        let Some(flavour) = locate() else {
             return self.set(TunnelInfo::failed(
-                "opentunnel not found on PATH (install it, or set OPENTUNNEL_BIN)",
+                "no tunnel helper: ship cloudflared next to the app, install opentunnel, or set OPENTUNNEL_BIN",
             ));
         };
 
-        let mut child = match cli_async(&binary)
-            .arg("route")
-            .arg("add")
-            .arg(hub_port.to_string())
+        let mut command = cli_async(flavour.binary());
+        command
+            .args(flavour.start_args(hub_port))
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .stdin(Stdio::null())
-            .spawn()
-        {
+            .stdin(Stdio::null());
+        let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
                 return self.set(TunnelInfo::failed(format!(
                     "cannot run {}: {error}",
-                    binary.display()
+                    flavour.binary().display()
                 )));
             }
         };
@@ -201,6 +203,10 @@ impl TunnelManager {
                 let mut lines = BufReader::new(stream).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
                     if tx.send(line).await.is_err() {
+                        // Nobody is reading any more (the URL was found). Keep
+                        // draining: closing the pipe kills the tunnel helper
+                        // on its next write.
+                        while let Ok(Some(_)) = lines.next_line().await {}
                         break;
                     }
                 }
@@ -212,7 +218,7 @@ impl TunnelManager {
         let mut tail: Vec<String> = Vec::new();
         let public_url = tokio::time::timeout(START_TIMEOUT, async {
             while let Some(line) = rx.recv().await {
-                if let Some(url) = parse_public_url(&line) {
+                if let Some(url) = parse_public_url(&line).filter(|url| flavour.claims(url)) {
                     return Some(url);
                 }
                 tail.push(line);
@@ -228,9 +234,9 @@ impl TunnelManager {
             url.ok_or_else(|| {
                 let last = tail.join("\n");
                 if last.is_empty() {
-                    "opentunnel exited without printing a public URL".to_string()
+                    format!("{} exited without printing a public URL", flavour.label())
                 } else {
-                    format!("opentunnel printed no public URL; last output:\n{last}")
+                    format!("{} printed no public URL; last output:\n{last}", flavour.label())
                 }
             })
         });
@@ -247,6 +253,7 @@ impl TunnelManager {
             status: "starting".into(),
             public_url: Some(public_url.clone()),
             error: None,
+            kind: Some(flavour.label().to_string()),
         });
 
         // Phase 2: poll the public endpoint until TLS + HTTP answer.
@@ -278,6 +285,7 @@ impl TunnelManager {
                         status: "ready".into(),
                         public_url: Some(public_url),
                         error: None,
+                        kind: Some(flavour.label().to_string()),
                     });
                 }
                 Ok(response) => last_error = format!("HTTP {}", response.status()),
@@ -293,6 +301,7 @@ impl TunnelManager {
                 "public URL did not answer within {}s: {last_error}",
                 READY_TIMEOUT.as_secs()
             )),
+            kind: Some(flavour.label().to_string()),
         };
         self.stop().await;
         self.set(info)
@@ -311,6 +320,7 @@ fn parse_status(text: &str) -> Option<TunnelInfo> {
         status: "ready".into(),
         public_url: text.lines().filter_map(route_url).next(),
         error: None,
+        kind: Some("opentunnel".into()),
     })
 }
 
@@ -381,11 +391,92 @@ fn cli_async(binary: &Path) -> tokio::process::Command {
     tokio::process::Command::new(binary)
 }
 
-fn locate_binary() -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("OPENTUNNEL_BIN") {
-        return Some(PathBuf::from(path));
+/// The tunnel helper in play. OpenTunnel keeps one stable URL per machine;
+/// cloudflared ships with the app and mints a fresh URL on every run.
+#[derive(Clone, Debug)]
+pub enum Flavour {
+    OpenTunnel(PathBuf),
+    Cloudflared(PathBuf),
+}
+
+impl Flavour {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Flavour::OpenTunnel(_) => "opentunnel",
+            Flavour::Cloudflared(_) => "cloudflared",
+        }
     }
-    which::which("opentunnel").ok()
+
+    fn binary(&self) -> &Path {
+        match self {
+            Flavour::OpenTunnel(path) | Flavour::Cloudflared(path) => path,
+        }
+    }
+
+    /// Does a URL printed by this helper plausibly belong to it? cloudflared
+    /// prints the Cloudflare terms link before the tunnel URL, so the first
+    /// https:// token is the wrong one.
+    fn claims(&self, url: &str) -> bool {
+        match self {
+            Flavour::OpenTunnel(_) => true,
+            Flavour::Cloudflared(_) => url
+                .split_once("://")
+                .map(|(_, rest)| {
+                    let host = rest.split('/').next().unwrap_or(rest);
+                    host.ends_with(".trycloudflare.com")
+                })
+                .unwrap_or(false),
+        }
+    }
+
+    /// The command that starts a tunnel to `port`, plus its arguments.
+    fn start_args(&self, port: u16) -> Vec<String> {
+        match self {
+            Flavour::OpenTunnel(_) => vec!["route".into(), "add".into(), port.to_string()],
+            Flavour::Cloudflared(_) => vec![
+                "tunnel".into(),
+                "--url".into(),
+                format!("http://127.0.0.1:{port}"),
+                "--no-autoupdate".into(),
+            ],
+        }
+    }
+}
+
+/// A tunnel helper shipped beside the app binary, so a fresh install needs
+/// nothing from the machine.
+fn bundled(name: &str) -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let file = if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    };
+    let candidate = dir.join(file);
+    candidate.is_file().then_some(candidate)
+}
+
+pub fn locate() -> Option<Flavour> {
+    // BIONICHAT_TUNNEL=cloudflared skips a system opentunnel; handy for testing
+    // the bundled path on a machine that has both.
+    let forced = std::env::var("BIONICHAT_TUNNEL").unwrap_or_default();
+    let want_cloudflared = forced.eq_ignore_ascii_case("cloudflared");
+
+    if !want_cloudflared {
+        if let Ok(path) = std::env::var("OPENTUNNEL_BIN") {
+            return Some(Flavour::OpenTunnel(PathBuf::from(path)));
+        }
+        if let Ok(path) = which::which("opentunnel") {
+            return Some(Flavour::OpenTunnel(path));
+        }
+    }
+    if let Some(path) = bundled("cloudflared") {
+        return Some(Flavour::Cloudflared(path));
+    }
+    which::which("cloudflared")
+        .ok()
+        .map(Flavour::Cloudflared)
 }
 
 /// Pull the first `https://` token out of a log line, trimming punctuation.
@@ -404,6 +495,20 @@ mod tests {
 
     /// Tests that mutate process-wide env (PATH, OPENTUNNEL_BIN) must not race.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn cloudflared_banner_url_wins_over_its_terms_link() {
+        let flavour = Flavour::Cloudflared(PathBuf::from("/usr/bin/cloudflared"));
+        let terms = "INF |  https://www.cloudflare.com/website-terms  |";
+        let banner = "INF |  https://theatre-near-compatible-mailto.trycloudflare.com  |";
+        let picked = parse_public_url(terms)
+            .filter(|url| flavour.claims(url))
+            .or_else(|| parse_public_url(banner).filter(|url| flavour.claims(url)));
+        assert_eq!(
+            picked.as_deref(),
+            Some("https://theatre-near-compatible-mailto.trycloudflare.com")
+        );
+    }
 
     #[test]
     fn finds_url_in_route_output() {
@@ -488,8 +593,14 @@ mod tests {
         }
         assert_eq!(info.status, "error");
         let error = info.error.expect("error text");
-        assert!(error.contains("opentunnel not found on PATH"), "{error}");
-        assert!(error.contains("OPENTUNNEL_BIN"), "{error}");
+        assert!(
+            error.contains("no tunnel helper"),
+            "a missing helper must say so: {error}"
+        );
+        assert!(
+            error.contains("OPENTUNNEL_BIN"),
+            "the message must name the escape hatch: {error}"
+        );
     }
 
     #[tokio::test]

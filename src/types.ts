@@ -65,6 +65,7 @@ export interface TunnelInfo {
   status: "off" | "starting" | "ready" | "error";
   public_url: string | null;
   error: string | null;
+  kind: string | null;
 }
 
 export interface HubRow {

@@ -60,6 +60,7 @@ const fixtures = {
       status: "ready",
       public_url: "https://c836bdb2bc68b0d5.kfgepc72im6k.opentunnel.xyz/mcp",
       error: null,
+      kind: "opentunnel",
     },
     approvals: [],
     approvals_default: "read-only allow · everything else ask",
