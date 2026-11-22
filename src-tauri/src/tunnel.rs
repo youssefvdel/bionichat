@@ -123,13 +123,29 @@ fn pump(
 pub struct TunnelManager {
     child: Mutex<Option<tokio::process::Child>>,
     info: Mutex<TunnelInfo>,
+    /// Where failures are appended, so a headless run leaves evidence.
+    log: PathBuf,
 }
 
 impl TunnelManager {
-    pub fn new() -> Self {
+    pub fn new(log: PathBuf) -> Self {
         Self {
             child: Mutex::new(None),
             info: Mutex::new(TunnelInfo::off()),
+            log,
+        }
+    }
+
+    /// Append one line to the tunnel log; never fails the caller.
+    fn note(&self, text: &str) {
+        use std::io::Write as _;
+        let stamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.log)
+        {
+            let _ = writeln!(file, "[{stamp}] {text}");
         }
     }
 
@@ -222,10 +238,15 @@ impl TunnelManager {
         });
 
         let Some(helper) = locate() else {
-            return self.set(TunnelInfo::failed(
-                "no tunnel helper beside the app (expected bionichat-tunnel)",
-            ));
+            let message = "no tunnel helper beside the app (expected bionichat-tunnel)";
+            self.note(message);
+            return self.set(TunnelInfo::failed(message));
         };
+        self.note(&format!(
+            "starting {} (profile {})",
+            helper.path.display(),
+            helper.profile
+        ));
 
         let mut command = tokio::process::Command::new(&helper.path);
         command
@@ -236,10 +257,9 @@ impl TunnelManager {
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
-                return self.set(TunnelInfo::failed(format!(
-                    "cannot run {}: {error}",
-                    helper.path.display()
-                )));
+                let message = format!("cannot run {}: {error}", helper.path.display());
+                self.note(&message);
+                return self.set(TunnelInfo::failed(message));
             }
         };
 
@@ -283,8 +303,12 @@ impl TunnelManager {
         });
 
         let public_url = match public_url {
-            Ok(url) => url,
+            Ok(url) => {
+                self.note(&format!("public URL {url}"));
+                url
+            }
             Err(error) => {
+                self.note(&error);
                 self.stop().await;
                 return self.set(TunnelInfo::failed(error));
             }
@@ -335,13 +359,15 @@ impl TunnelManager {
             tokio::time::sleep(POLL_INTERVAL).await;
         }
 
+        let message = format!(
+            "public URL did not answer within {}s: {last_error}",
+            READY_TIMEOUT.as_secs()
+        );
+        self.note(&message);
         let info = TunnelInfo {
             status: "error".into(),
             public_url: Some(public_url),
-            error: Some(format!(
-                "public URL did not answer within {}s: {last_error}",
-                READY_TIMEOUT.as_secs()
-            )),
+            error: Some(message),
             kind: Some(helper.label().to_string()),
         };
         self.stop().await;
@@ -397,7 +423,9 @@ mod tests {
     async fn missing_helper_names_what_is_missing() {
         // A path that cannot be run stands in for a missing helper.
         unsafe { std::env::set_var("BIONICHAT_TUNNEL_BIN", "/nonexistent/bionichat-tunnel") };
-        let info = TunnelManager::new().start(8787).await;
+        let info = TunnelManager::new(std::env::temp_dir().join("bionichat-tunnel-test.log"))
+            .start(8787)
+            .await;
         unsafe { std::env::remove_var("BIONICHAT_TUNNEL_BIN") };
         assert_eq!(info.status, "error");
         let error = info.error.expect("error text");

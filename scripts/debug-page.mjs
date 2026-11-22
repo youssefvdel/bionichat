@@ -56,7 +56,8 @@ const fixtures = {
   dashboard: {
     servers,
     hub: { url: "http://127.0.0.1:8787/mcp", port: 8787, sessions: 3, note: "JSON-RPC over POST, no SSE" },
-    tunnel: {
+    settings,
+  tunnel: {
       status: "ready",
       public_url: "https://c836bdb2bc68b0d5.kfgepc72im6k.opentunnel.xyz/mcp",
       error: null,

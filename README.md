@@ -34,9 +34,11 @@ through OpenTunnel:
 - The helper uses the same profile and identity directory as the upstream CLI,
   so an existing URL keeps working.
 - `BIONICHAT_TUNNEL_AUTOSTART=1` brings the link up with the app.
-- `BIONICHAT_HEADLESS=1` runs the app with no window at all: hub, tools and
-  link only. The window is created hidden and only shown when that variable is
-  absent, so a headless run never flashes anything on a desktop.
+- Settings → Tunnel has two switches: *Start the link when the app opens* and
+  *Open with no window next time*. They live in `settings.json` beside
+  `registry.json`, so a machine can be set up once and left headless.
+- When the link fails, the reason lands in `tunnel.log` in the same folder:
+  which helper was started, the public URL, and the helper's own last output.
 
 ## Platforms
 

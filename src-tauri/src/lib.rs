@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -122,10 +122,34 @@ struct Dashboard {
 struct AppState {
     registry_path: PathBuf,
     projects_path: PathBuf,
+    settings_path: PathBuf,
     hub: Arc<Hub>,
     tunnel: TunnelManager,
     rows: Mutex<Vec<ServerRow>>,
     retries: Mutex<HashMap<String, u32>>,
+}
+
+/// What the app remembers about how to behave at launch.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct Settings {
+    /// Start the public link with the app.
+    #[serde(default)]
+    tunnel_autostart: bool,
+    /// Run with no window: hub, tools and link only.
+    #[serde(default)]
+    headless: bool,
+}
+
+fn load_settings(path: &std::path::Path) -> Settings {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn store_settings(path: &std::path::Path, settings: &Settings) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(settings).map_err(|error| error.to_string())?;
+    std::fs::write(path, text).map_err(|error| format!("cannot write {}: {error}", path.display()))
 }
 
 fn lock_rows(rows: &Mutex<Vec<ServerRow>>) -> std::sync::MutexGuard<'_, Vec<ServerRow>> {
@@ -547,6 +571,17 @@ async fn restart_server(
 }
 
 #[tauri::command]
+fn get_settings(state: State<'_, AppState>) -> Settings {
+    load_settings(&state.settings_path)
+}
+
+#[tauri::command]
+fn save_settings(settings: Settings, state: State<'_, AppState>) -> Result<Settings, String> {
+    store_settings(&state.settings_path, &settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
 async fn tunnel_start(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
     let info = state.tunnel.start(state.hub.port()).await;
     let _ = app.emit("tunnel-updated", info.clone());
@@ -698,6 +733,8 @@ pub fn run() {
             let skills_dir = data_dir.join(".agents");
             fs::create_dir_all(&skills_dir)?;
             let registry_path = data_dir.join("registry.json");
+            let settings_path = data_dir.join("settings.json");
+            let settings = load_settings(&settings_path);
 
             let exe_dir = std::env::current_exe()
                 .ok()
@@ -770,7 +807,7 @@ pub fn run() {
                 .unwrap_or(DEFAULT_PORT);
             let hub = Hub::new(registry_path.clone(), port, Some(app.handle().clone()));
 
-            let tunnel = TunnelManager::new();
+            let tunnel = TunnelManager::new(data_dir.join("tunnel.log"));
             tunnel.hydrate();
 
             let rows = registry
@@ -783,6 +820,7 @@ pub fn run() {
                 hub: hub.clone(),
                 tunnel,
                 projects_path: data_dir.join("projects.json"),
+                settings_path,
                 rows: Mutex::new(rows),
                 retries: Mutex::new(HashMap::new()),
             });
@@ -800,7 +838,8 @@ pub fn run() {
 
             // The window starts hidden so a headless run never flashes a
             // window in anyone's face; a normal launch shows it right away.
-            if std::env::var("BIONICHAT_HEADLESS").is_err() {
+            let headless = settings.headless || std::env::var("BIONICHAT_HEADLESS").is_ok();
+            if !headless {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
                 }
@@ -808,7 +847,9 @@ pub fn run() {
 
             // Headless runs (CI, a kiosk, a machine nobody clicks) can ask for
             // the link to come up with the app.
-            if std::env::var("BIONICHAT_TUNNEL_AUTOSTART").is_ok_and(|value| value != "0") {
+            let autostart_link = settings.tunnel_autostart
+                || std::env::var("BIONICHAT_TUNNEL_AUTOSTART").is_ok_and(|value| value != "0");
+            if autostart_link {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let autostart = handle.state::<AppState>().tunnel.start(port).await;
@@ -836,6 +877,8 @@ pub fn run() {
             resolve_session,
             restart_server,
             remove_server,
+            get_settings,
+            save_settings,
             tunnel_start,
             tunnel_stop,
             tunnel_revoke,

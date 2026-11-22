@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { ActivityEntry, ServerRow, TunnelInfo } from "../types";
+import { useEffect, useState } from "react";
+import type { ActivityEntry, ServerRow, Settings as AppSettings, TunnelInfo } from "../types";
 import { invoke } from "../tauri";
 import { Button, Panel } from "../components/ui";
 import { Pill } from "../components/chrome";
@@ -16,10 +16,28 @@ function Tunnel({
   onChange: (info: TunnelInfo) => void;
   primary: boolean;
 }) {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [armed, setArmed] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    invoke<AppSettings>("get_settings")
+      .then(setSettings)
+      .catch(() => setSettings({ tunnel_autostart: false, headless: false }));
+  }, []);
+
+  async function toggle(key: keyof AppSettings) {
+    if (!settings) return;
+    const next = { ...settings, [key]: !settings[key] };
+    setSettings(next);
+    try {
+      setSettings(await invoke<AppSettings>("save_settings", { settings: next }));
+    } catch (error) {
+      setError(String(error));
+    }
+  }
 
   const busy = info.status === "starting" || starting;
   const live = info.status === "ready";
@@ -98,6 +116,27 @@ function Tunnel({
           </Button>
         )}
       </div>
+
+      {settings && (
+        <div className="mt-3.5 flex flex-col gap-1.5 border-t border-line pt-3">
+          <label className="flex items-center gap-2 text-[12.5px] text-ink">
+            <input
+              type="checkbox"
+              checked={settings.tunnel_autostart}
+              onChange={() => void toggle("tunnel_autostart")}
+            />
+            Start the link when the app opens
+          </label>
+          <label className="flex items-center gap-2 text-[12.5px] text-ink">
+            <input
+              type="checkbox"
+              checked={settings.headless}
+              onChange={() => void toggle("headless")}
+            />
+            Open with no window next time
+          </label>
+        </div>
+      )}
 
       {(error || info.error) && (
         <p role="alert" className="mt-2 font-mono text-[11.5px] break-words text-bad">

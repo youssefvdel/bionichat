@@ -61,6 +61,11 @@ export interface CallStart {
   at_ms: number;
 }
 
+export interface Settings {
+  tunnel_autostart: boolean;
+  headless: boolean;
+}
+
 export interface TunnelInfo {
   status: "off" | "starting" | "ready" | "error";
   public_url: string | null;
