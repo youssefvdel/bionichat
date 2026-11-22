@@ -53,12 +53,21 @@ for (const file of files) {
 // The build layout differs by crate version: `cef-dll-sys-<hash>/out/cef_*`
 // and `cef-dll-sys/<hash>/out/cef_*` both exist in the wild, so find the
 // library itself and take its directory instead of guessing the path.
-function findCefDir(dir, depth) {
-  if (depth > 5 || !existsSync(dir)) return null;
-  const runtime = ["libcef.dll", "libcef.so", "Chromium Embedded Framework.framework"].find((name) =>
+// A runtime directory is the one that also carries Chromium's assets. A bare
+// libcef.dll also appears higher up in build/, next to 60 GB of cargo output:
+// copying that would ship half the build tree.
+function isRuntimeDir(dir) {
+  const hasLibrary = ["libcef.dll", "libcef.so", "Chromium Embedded Framework.framework"].some((name) =>
     existsSync(join(dir, name)),
   );
-  if (runtime) return dir;
+  if (!hasLibrary) return false;
+  if (existsSync(join(dir, "locales"))) return true;
+  return readdirSync(dir).some((name) => name.endsWith(".pak"));
+}
+
+function findCefDir(dir, depth) {
+  if (depth > 5 || !existsSync(dir)) return null;
+  if (isRuntimeDir(dir)) return dir;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const found = findCefDir(join(dir, entry.name), depth + 1);
