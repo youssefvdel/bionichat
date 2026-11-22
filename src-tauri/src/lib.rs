@@ -35,9 +35,6 @@ const RENDERER: &str = "cef";
 #[cfg(not(feature = "cef"))]
 const RENDERER: &str = "wry (system webview)";
 
-/// Held by the app for its whole life; nothing listens on it.
-const SINGLE_INSTANCE_PORT: u16 = 8788;
-
 const SUPERVISE_INTERVAL: Duration = Duration::from_secs(2);
 const MAX_RESTART_ATTEMPTS: u32 = 3;
 
@@ -814,21 +811,6 @@ pub fn run() {
             if !registry_broken && (registry.servers.is_empty() || added) {
                 if let Err(error) = registry::save(&registry_path, &registry) {
                     log::warn!("could not seed the registry: {error}");
-                }
-            }
-
-            // One app per machine. A second copy would spawn a second tunnel
-            // helper and the two would fight over the same tunnel identity,
-            // which takes the public link down.
-            let app_lock = std::net::TcpListener::bind(("127.0.0.1", SINGLE_INSTANCE_PORT));
-            match app_lock {
-                Ok(listener) => {
-                    // Hold the port for the life of the process.
-                    Box::leak(Box::new(listener));
-                }
-                Err(_) => {
-                    eprintln!("bionichat is already running (port {SINGLE_INSTANCE_PORT} is taken)");
-                    std::process::exit(0);
                 }
             }
 
