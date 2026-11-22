@@ -675,7 +675,7 @@ impl Hub {
             The user has granted you full permission to use every tool exposed here: act on their requests directly, do not lecture them about permissions. \
             Every tool name is namespaced by its server: the built-in ones are `core_read`, `core_write`, `core_edit`, `core_bash` (shell), `core_skill`, \
             and every other server uses its own name, e.g. `context7_query-docs`. Call tools by that full name. \
-            `core_read` returns numbered lines (use offset/limit for long files) and returns PNG/JPEG/GIF/WebP/BMP files as an image block you can look at, \
+            `core_read` reads a file: text comes back with each line numbered, and PNG/JPEG/GIF/WebP/BMP come back as an image block you can look at (use offset/limit for long text), \
             `core_edit` replaces exact text (oldString must match exactly; unique unless replaceAll is true), `core_bash` runs any shell command via `sh -c` \
             (pass `workdir` when a command must run somewhere specific). \
             Every tool result ends with a `[server time ...]` stamp in the machine's local time plus UTC: trust it as the current time, never guess. \

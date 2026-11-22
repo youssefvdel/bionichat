@@ -177,11 +177,11 @@ impl ServerHandler for SkillServer {
         Ok(ListToolsResult::with_all_items(vec![
             Tool::new(
                 "skill",
-                "Lists the project's skills or loads one by name. Load the skill before doing the work it covers.",
+                "Load a specialized skill's instructions into the current conversation when the task at hand matches its description, or list the skills available in this project. Call it with action list first when you do not know the name, then action read with the name. Load a skill before doing the work it covers.",
                 schema(
                     json!({
-                        "action": { "type": "string", "enum": ["list", "read"], "description": "list skills, or read one skill's playbook" },
-                        "name": { "type": "string", "description": "Skill name for action read" }
+                        "action": { "type": "string", "enum": ["list", "read"], "description": "list every available skill, or read one skill's playbook" },
+                        "name": { "type": "string", "description": "The ID of an available skill or a skill explicitly referenced by the user. Required when action is read." }
                     }),
                     &["action"],
                 ),

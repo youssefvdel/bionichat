@@ -57,7 +57,7 @@ impl ServerHandler for BashServer {
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult::with_all_items(vec![Tool::new(
             "bash",
-            "Runs a shell command via `sh -c` (Windows: `cmd /C`) and returns exit code, stdout and stderr. Mutating: approval required.",
+            "Execute a shell command and return its output (exit code, stdout and stderr). Quote file paths containing spaces or special characters. Prefer the read, write and edit tools over shell commands when one of them does the job. Commands still running after their timeout are stopped. Pass workdir instead of changing directories inside the command.",
             schema(
                 json!({
                     "command": {
@@ -66,11 +66,11 @@ impl ServerHandler for BashServer {
                     },
                     "workdir": {
                         "type": "string",
-                        "description": "Working directory (default: your home directory)"
+                        "description": "Working directory to execute the command in. Defaults to the user's home directory. When possible, avoid changing directories in the command and set the working directory here instead."
                     },
                     "timeout_ms": {
                         "type": "integer",
-                        "description": "Kill the command after this long (default 30000, max 120000)"
+                        "description": "Optional timeout in milliseconds (default 30000, max 120000). When it expires the command is killed."
                     }
                 }),
                 &["command"],

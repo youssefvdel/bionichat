@@ -102,12 +102,12 @@ impl ServerHandler for FsServer {
         Ok(ListToolsResult::with_all_items(vec![
             Tool::new(
                 "read",
-                "Reads a UTF-8 text file. Returns numbered lines; use offset/limit for long files.",
+                "Read the contents of a file. Supports text files and images: an image (PNG, JPEG, GIF, WebP, BMP) is returned as an image block the model can look at, up to 8 MB. Each text line is prefixed by its 1-based line number as <line>: <content>; the prefix is for reference and is not part of the file content. Use offset and limit to read large files in sections. Prefer one larger read over many small slices, and use bash with grep to find specific content in large files.",
                 schema(
                     json!({
                         "path": { "type": "string", "description": "File to read" },
-                        "offset": { "type": "integer", "description": "First line to return (1-based, default 1)" },
-                        "limit": { "type": "integer", "description": "Max lines to return (default 2000)" }
+                        "offset": { "type": "integer", "description": "The line to start reading from (1-based). Defaults to 1." },
+                        "limit": { "type": "integer", "description": "The maximum number of lines to read (defaults to and capped at 10000)" }
                     }),
                     &["path"],
                 ),
@@ -115,24 +115,24 @@ impl ServerHandler for FsServer {
             .with_annotations(ToolAnnotations::new().read_only(true)),
             Tool::new(
                 "write",
-                "Creates or overwrites a file with UTF-8 text, creating parent directories. Mutating: approval required.",
+                "Writes a file to the local filesystem, overwriting if one exists. Missing parent directories are created automatically. Use this tool to create new files or overwrite existing files. For partial changes, use the edit tool instead.",
                 schema(
                     json!({
-                        "path": { "type": "string", "description": "File to write" },
-                        "content": { "type": "string", "description": "Text to write (replaces the file)" }
+                        "path": { "type": "string", "description": "Path to the file to write to" },
+                        "content": { "type": "string", "description": "Content to write to the file" }
                     }),
                     &["path", "content"],
                 ),
             ),
             Tool::new(
                 "edit",
-                "Replaces exact text in a file. oldString must match exactly; it must be unique unless replaceAll is true. Mutating: approval required.",
+                "Performs exact string replacements in files. oldString must match the file exactly, including whitespace and indentation. When replaceAll is false, oldString must appear exactly once; otherwise the call fails and nothing is written.",
                 schema(
                     json!({
                         "path": { "type": "string", "description": "File to edit" },
-                        "oldString": { "type": "string", "description": "Exact text to find" },
-                        "newString": { "type": "string", "description": "Replacement text" },
-                        "replaceAll": { "type": "boolean", "description": "Replace every occurrence (default false)" }
+                        "oldString": { "type": "string", "description": "Exact text to find and replace" },
+                        "newString": { "type": "string", "description": "Text to replace oldString with (must differ from oldString)" },
+                        "replaceAll": { "type": "boolean", "description": "Whether to replace every occurrence of oldString. When false, oldString must match exactly once. Defaults to false." }
                     }),
                     &["path", "oldString", "newString"],
                 ),
