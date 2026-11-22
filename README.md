@@ -33,8 +33,10 @@ through OpenTunnel:
   is dead for good.
 - The helper uses the same profile and identity directory as the upstream CLI,
   so an existing URL keeps working.
-- `BIONICHAT_TUNNEL_AUTOSTART=1` brings the link up with the app (headless
-  machines, kiosks, or a watchdog that keeps the app alive).
+- `BIONICHAT_TUNNEL_AUTOSTART=1` brings the link up with the app.
+- `BIONICHAT_HEADLESS=1` runs the app with no window at all: hub, tools and
+  link only. The window is created hidden and only shown when that variable is
+  absent, so a headless run never flashes anything on a desktop.
 
 ## Platforms
 

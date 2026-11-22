@@ -52,6 +52,17 @@ fn parse_args() -> Result<Args> {
 
 fn main() -> Result<()> {
     let args = parse_args()?;
+
+    // The library resolves its identity directory from HOME. Windows sets
+    // USERPROFILE instead, and a process started by the Task Scheduler may
+    // have neither: without this the helper would provision a fresh tunnel in
+    // the temp directory and lose the machine's stable hostname.
+    if std::env::var_os("HOME").is_none() {
+        if let Some(profile) = std::env::var_os("USERPROFILE") {
+            // SAFETY: nothing else runs yet, and this is the process start.
+            unsafe { std::env::set_var("HOME", profile) };
+        }
+    }
     let client = Client::new(ClientOptions {
         api: None,
         storage: None,

@@ -798,6 +798,14 @@ pub fn run() {
             refresh_in_background(app.handle());
             spawn_supervisor(app.handle().clone());
 
+            // The window starts hidden so a headless run never flashes a
+            // window in anyone's face; a normal launch shows it right away.
+            if std::env::var("BIONICHAT_HEADLESS").is_err() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                }
+            }
+
             // Headless runs (CI, a kiosk, a machine nobody clicks) can ask for
             // the link to come up with the app.
             if std::env::var("BIONICHAT_TUNNEL_AUTOSTART").is_ok_and(|value| value != "0") {

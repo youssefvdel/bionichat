@@ -26,6 +26,8 @@ Mac has run it: `MACOS.md` has the first-run checklist.
 - The public link is stable per machine: `https://<id>.opentunnel.xyz`.
 - `BIONICHAT_TUNNEL_AUTOSTART=1` brings the link up with the app, for machines
   nobody clicks.
+- `BIONICHAT_HEADLESS=1` runs with no window (server, CI, or a machine you do
+  not want a window on). Proven on Linux; the Windows run is the same code.
 
 ## Differences that matter
 
