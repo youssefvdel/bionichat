@@ -28,6 +28,7 @@ tauri-runtime-wry = { version = "=3.0.0-alpha.6", optional = true }
 tauri-runtime-cef = { version = "=3.0.0-alpha.7", optional = true }
 tauri-plugin-log = "3.0.0-alpha.1"
 axum = "0.8"
+base64 = "0.22"
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 which = "8"
 log = "0.4"

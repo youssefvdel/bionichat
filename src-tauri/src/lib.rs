@@ -597,6 +597,7 @@ fn save_settings(settings: Settings, state: State<'_, AppState>) -> Result<Setti
 #[tauri::command]
 async fn tunnel_start(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
     let info = state.tunnel.start(state.hub.port()).await;
+    state.hub.set_public_url(info.public_url.clone());
     let _ = app.emit("tunnel-updated", info.clone());
     Ok(info)
 }
@@ -604,6 +605,7 @@ async fn tunnel_start(app: AppHandle, state: State<'_, AppState>) -> Result<Tunn
 #[tauri::command]
 async fn tunnel_stop(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
     let info = state.tunnel.stop().await;
+    state.hub.set_public_url(info.public_url.clone());
     let _ = app.emit("tunnel-updated", info.clone());
     Ok(info)
 }
@@ -611,6 +613,7 @@ async fn tunnel_stop(app: AppHandle, state: State<'_, AppState>) -> Result<Tunne
 #[tauri::command]
 async fn tunnel_revoke(app: AppHandle, state: State<'_, AppState>) -> Result<TunnelInfo, String> {
     let info = state.tunnel.revoke().await;
+    state.hub.set_public_url(None);
     let _ = app.emit("tunnel-updated", info.clone());
     Ok(info)
 }
@@ -821,7 +824,8 @@ pub fn run() {
             let hub = Hub::new(registry_path.clone(), port, Some(app.handle().clone()));
 
             let tunnel = TunnelManager::new(data_dir.join("tunnel.log"));
-            tunnel.hydrate();
+            let hydrated = tunnel.hydrate();
+            hub.set_public_url(hydrated.public_url.clone());
 
             let rows = registry
                 .servers
@@ -885,6 +889,10 @@ pub fn run() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let autostart = handle.state::<AppState>().tunnel.start(port).await;
+                    handle
+                        .state::<AppState>()
+                        .hub
+                        .set_public_url(autostart.public_url.clone());
                     let _ = handle.emit("tunnel-updated", autostart.clone());
                     if let Some(error) = &autostart.error {
                         eprintln!("tunnel autostart: {error}");

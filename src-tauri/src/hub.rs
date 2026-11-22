@@ -21,7 +21,7 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
 };
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -84,6 +84,28 @@ fn preview_of(text: &str, limit: usize) -> String {
     format!("{}…", text.chars().take(limit).collect::<String>())
 }
 
+struct PublishedImage {
+    token: String,
+    name: String,
+    mime: String,
+    /// Base64 as the tool produced it; decoded only when someone fetches it.
+    data: String,
+}
+
+/// Pictures kept for the image URLs. A screenshot is a few MB, and only the
+/// last few calls matter to whoever is reading the chat.
+const MAX_PUBLISHED_IMAGES: usize = 6;
+
+fn extension_for(mime: &str) -> &'static str {
+    match mime {
+        "image/jpeg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" => "bmp",
+        _ => "png",
+    }
+}
+
 pub struct Hub {
     port: u16,
     registry_path: PathBuf,
@@ -106,6 +128,13 @@ pub struct Hub {
     session_allows: Mutex<HashSet<(String, String)>>,
     pending: Mutex<HashMap<u64, Pending>>,
     activity: Mutex<std::collections::VecDeque<ActivityEntry>>,
+    /// Public base URL of the tunnel while it is up. Tool results that carry
+    /// an image also publish a link under it, so a client that cannot take an
+    /// image block can still fetch the picture.
+    public_url: Mutex<Option<String>>,
+    /// Most recent images handed out by tools, newest last. Bounded: these are
+    /// whole pictures, and nothing older than a few calls is ever fetched.
+    images: Mutex<std::collections::VecDeque<PublishedImage>>,
     next_id: AtomicU64,
     app: Option<AppHandle>,
     ask_timeout: Duration,
@@ -126,6 +155,8 @@ impl Hub {
             session_allows: Mutex::new(HashSet::new()),
             pending: Mutex::new(HashMap::new()),
             activity: Mutex::new(std::collections::VecDeque::with_capacity(51)),
+            public_url: Mutex::new(None),
+            images: Mutex::new(std::collections::VecDeque::new()),
             next_id: AtomicU64::new(1),
             app,
             ask_timeout: ASK_TIMEOUT,
@@ -145,6 +176,8 @@ impl Hub {
             session_allows: Mutex::new(HashSet::new()),
             pending: Mutex::new(HashMap::new()),
             activity: Mutex::new(std::collections::VecDeque::with_capacity(51)),
+            public_url: Mutex::new(None),
+            images: Mutex::new(std::collections::VecDeque::new()),
             next_id: AtomicU64::new(1),
             app: None,
             ask_timeout: timeout,
@@ -610,7 +643,8 @@ impl Hub {
             }
             None => result.content.push(ContentBlock::text(stamp)),
         }
-        let value = serde_json::to_value(result).map_err(|e| (-32603, e.to_string()))?;
+        let mut value = serde_json::to_value(result).map_err(|e| (-32603, e.to_string()))?;
+        self.publish_images(&mut value, &tool);
         let preview = value
             .pointer("/content/0/text")
             .and_then(Value::as_str)
@@ -745,6 +779,99 @@ impl Hub {
         }
     }
 
+    /// Remember the tunnel's public base URL (None when it comes down).
+    pub fn set_public_url(&self, url: Option<String>) {
+        *self
+            .public_url
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = url;
+    }
+
+    /// Publish every image in a finished tool result as a link, and say so in
+    /// the text block. Clients that render only text still get a way to the
+    /// picture; clients that take image blocks already have the bytes.
+    fn publish_images(&self, value: &mut Value, tool: &str) {
+        let Some(content) = value.pointer_mut("/content").and_then(Value::as_array_mut) else {
+            return;
+        };
+        let mut published: Vec<(String, String)> = Vec::new();
+        for block in content.iter() {
+            let Some(kind) = block.get("type").and_then(Value::as_str) else {
+                continue;
+            };
+            if kind != "image" {
+                continue;
+            }
+            let Some(data) = block.get("data").and_then(Value::as_str) else {
+                continue;
+            };
+            let mime = block
+                .get("mimeType")
+                .and_then(Value::as_str)
+                .unwrap_or("image/png")
+                .to_string();
+            let token = format!("{:016x}{:016x}", self.next_id.fetch_add(1, Ordering::SeqCst), {
+                use std::hash::{Hash, Hasher};
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                data.hash(&mut hasher);
+                hasher.finish()
+            });
+            let name = format!("{tool}.{}", extension_for(&mime));
+            let mut images = self
+                .images
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            images.push_back(PublishedImage {
+                token: token.clone(),
+                name: name.clone(),
+                mime,
+                data: data.to_string(),
+            });
+            while images.len() > MAX_PUBLISHED_IMAGES {
+                images.pop_front();
+            }
+            published.push((token, name));
+        }
+        if published.is_empty() {
+            return;
+        }
+        let base = self
+            .public_url
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+            .unwrap_or_else(|| format!("http://127.0.0.1:{}", self.port));
+        let links: Vec<String> = published
+            .iter()
+            .map(|(token, name)| format!("{base}/files/{token}/{name}"))
+            .collect();
+        let note = format!("Image URL: {}", links.join(" "));
+        match content
+            .iter_mut()
+            .rev()
+            .find_map(|block| block.get_mut("text"))
+        {
+            Some(text) => {
+                if let Some(existing) = text.as_str() {
+                    *text = Value::String(format!("{existing}\n\n{note}"));
+                }
+            }
+            None => content.push(json!({ "type": "text", "text": note })),
+        }
+    }
+
+    /// Bytes and type for a published image, by token.
+    pub fn published_image(&self, token: &str) -> Option<(String, String)> {
+        let images = self
+            .images
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        images
+            .iter()
+            .find(|image| image.token == token)
+            .map(|image| (image.mime.clone(), image.data.clone()))
+    }
+
     /// Bind 127.0.0.1:<port> and serve until the process exits.
     pub async fn serve(self: Arc<Self>) -> Result<(), String> {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", self.port))
@@ -752,6 +879,7 @@ impl Hub {
             .map_err(|e| format!("cannot bind 127.0.0.1:{}: {e}", self.port))?;
         let app = Router::new()
             .route("/mcp", post(post_mcp))
+            .route("/files/{token}/{name}", get(get_file))
             .with_state(self);
         axum::serve(listener, app)
             .await
@@ -779,6 +907,25 @@ fn rpc_error(id: Value, code: i64, message: String) -> Rpc {
         StatusCode::OK,
         Some(json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })),
     )
+}
+
+async fn get_file(
+    State(hub): State<Arc<Hub>>,
+    axum::extract::Path((token, _name)): axum::extract::Path<(String, String)>,
+) -> Response {
+    use base64::Engine as _;
+    let Some((mime, data)) = hub.published_image(&token) else {
+        return (StatusCode::NOT_FOUND, "no such image\n").into_response();
+    };
+    match base64::engine::general_purpose::STANDARD.decode(data) {
+        Ok(bytes) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, mime)],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "image is not valid base64\n").into_response(),
+    }
 }
 
 async fn post_mcp(State(hub): State<Arc<Hub>>, body: axum::body::Bytes) -> Response {
@@ -1250,6 +1397,52 @@ mod tests {
             info.pointer("/title").and_then(Value::as_str).is_some(),
             "server title"
         );
+    }
+
+    #[tokio::test]
+    async fn image_results_publish_a_fetchable_link() {
+        let hub = test_hub("image-link");
+        hub.set_public_url(Some("https://example.test".to_string()));
+        // 1x1 transparent PNG.
+        let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        let path = std::env::temp_dir().join("bionichat-tests").join("dot.png");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        {
+            use base64::Engine as _;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(png).unwrap();
+            std::fs::write(&path, bytes).unwrap();
+        }
+        let (_, body) = hub
+            .handle_rpc(json!({
+                "jsonrpc":"2.0","id":1,"method":"tools/call",
+                "params":{"name":"core_read","arguments":{"path": path.to_string_lossy()}}
+            }))
+            .await;
+        let body = body.expect("read body");
+        let content = body.pointer("/result/content").expect("content");
+        assert_eq!(
+            content.pointer("/0/type").and_then(Value::as_str),
+            Some("image"),
+            "image must stay first: {content}"
+        );
+        let text = content
+            .pointer("/1/text")
+            .and_then(Value::as_str)
+            .expect("text block after the image");
+        let link = text
+            .lines()
+            .find(|line| line.starts_with("Image URL: "))
+            .expect("image URL line");
+        let url = link.trim_start_matches("Image URL: ");
+        assert!(url.starts_with("https://example.test/files/"), "{url}");
+        let token = url
+            .trim_start_matches("https://example.test/files/")
+            .split('/')
+            .next()
+            .expect("token");
+        let (mime, data) = hub.published_image(token).expect("published image");
+        assert_eq!(mime, "image/png");
+        assert_eq!(data, png);
     }
 
     #[tokio::test]
