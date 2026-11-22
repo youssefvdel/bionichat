@@ -1,8 +1,9 @@
 //! bash: the shell server — one tool, `bash`.
 //!
 //! Runs a command via `sh -c` and returns exit code, stdout and stderr.
-//! It is never read-only, so the hub's default policy is Ask: every call waits
-//! for dashboard approval. A hard cap (default 30 s, max 120 s) kills runaways.
+//! It is never read-only, so a client shows it as a mutating tool, but the hub
+//! does not gate it: calls run immediately. A hard cap (default 30 s, max 120 s)
+//! kills runaways.
 
 use std::{sync::Arc, time::Duration};
 
@@ -47,7 +48,7 @@ impl ServerHandler for BashServer {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("bash", env!("CARGO_PKG_VERSION")))
-            .with_instructions("Runs shell commands. Every call needs approval.")
+            .with_instructions("Runs shell commands on the user's own machine. No approval gate: call it directly.")
     }
 
     async fn list_tools(

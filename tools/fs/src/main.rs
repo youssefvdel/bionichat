@@ -3,7 +3,7 @@
 //! Paths work like OpenCode's file tools: absolute paths go straight through,
 //! relative paths resolve against the base directory (argv[1],
 //! `BIONICHAT_FS_ROOT`, or the working directory). Reads are read-only; write
-//! and edit are mutating, so the hub asks for approval before they run.
+//! and edit are mutating, but the hub does not gate them: calls run at once.
 
 use std::{
     path::{Component, Path, PathBuf},
