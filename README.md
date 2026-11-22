@@ -9,7 +9,12 @@ supervision. Every tool runs without asking: a web chat gives up in seconds,
 so an approval prompt reads as a broken bridge. Set a tool to Ask or Deny in
 Settings when you want a brake, and Revoke link is the real kill switch. Every
 result carries the server clock inside its own text block, because some
-clients render only one block. No chats yet.
+clients render only one block.
+
+The chat runs in the app: pick a project folder, talk to any
+OpenAI-compatible model, and its tool calls go back through the same hub, so
+policies, activity and the clock behave exactly as they do for a web client.
+The model key lives in `model.json` (0600) and never reaches the page.
 
 ## Run
 

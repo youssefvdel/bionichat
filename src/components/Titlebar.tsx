@@ -51,14 +51,57 @@ function WinButton({
   );
 }
 
+interface WindowSpot {
+  x: number;
+  y: number;
+}
+
 export function Titlebar({ renderer }: { renderer: string }) {
   function run(command: string) {
     void invoke(command).catch(() => {});
   }
 
+  /** Drag the window by hand: the CEF runtime has no native drag region. */
+  function startDrag(e: React.MouseEvent<HTMLElement>) {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button")) return;
+    const startX = e.screenX;
+    const startY = e.screenY;
+    const origin = invoke<WindowSpot>("window_spot").catch(() => ({ x: 0, y: 0 }));
+    let frame = 0;
+    let pending = { x: startX, y: startY };
+
+    function onMove(event: MouseEvent) {
+      pending = { x: event.screenX, y: event.screenY };
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        void origin.then((spot) => {
+          invoke("window_move", {
+            x: spot.x + (pending.x - startX),
+            y: spot.y + (pending.y - startY),
+          }).catch(() => {});
+        });
+      });
+    }
+
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (frame) window.cancelAnimationFrame(frame);
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   return (
     <header
-      data-tauri-drag-region
+      onMouseDown={startDrag}
+      onDoubleClick={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        run("window_toggle_maximize");
+      }}
       className="flex h-[52px] shrink-0 items-center gap-2.5 px-4 select-none"
     >
       <span className="text-ink">

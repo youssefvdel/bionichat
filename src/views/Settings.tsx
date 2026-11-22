@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { ActivityEntry, ServerRow, TunnelInfo } from "../types";
+import { useEffect, useState } from "react";
+import type { ActivityEntry, ModelView, ServerRow, TunnelInfo } from "../types";
 import { invoke } from "../tauri";
 import { Button, Panel } from "../components/ui";
 import { Pill } from "../components/chrome";
@@ -99,6 +99,106 @@ function Tunnel({
           {error || info.error}
         </p>
       )}
+    </Panel>
+  );
+}
+
+function ModelPanel() {
+  const [view, setView] = useState<ModelView | null>(null);
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("");
+  const [key, setKey] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    invoke<ModelView>("model_config")
+      .then((next) => {
+        setView(next);
+        setBaseUrl(next.base_url);
+        setModel(next.model);
+      })
+      .catch((e: unknown) => setError(String(e)));
+  }, []);
+
+  async function save() {
+    setError("");
+    setNote("");
+    try {
+      const next = await invoke<ModelView>("save_model", {
+        baseUrl,
+        model,
+        apiKey: key,
+      });
+      setView(next);
+      setKey("");
+      setNote(next.configured ? "saved" : "saved, but no key yet");
+      window.setTimeout(() => setNote(""), 1800);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  return (
+    <Panel
+      labelledBy="model-title"
+      title="Model"
+      right={
+        <span className="text-[11.5px] text-dim">
+          {view?.configured ? `ready · ${view.key_hint}` : "not configured"}
+        </span>
+      }
+    >
+      <p className="m-0 text-[12.5px] text-dim">
+        The chat runs on this machine and calls any OpenAI-compatible API. The key stays in
+        <code className="mx-1 font-mono text-[11.5px]">model.json</code>
+        with owner-only permissions and never reaches the page.
+      </p>
+
+      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <label className="flex flex-col gap-1 text-[11px] text-dim">
+          Base URL
+          <input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            spellCheck={false}
+            placeholder="https://api.openai.com/v1"
+            className="clay-field font-mono !text-[11.5px]"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] text-dim">
+          Model
+          <input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            spellCheck={false}
+            placeholder="gpt-4o-mini"
+            className="clay-field font-mono !text-[11.5px]"
+          />
+        </label>
+      </div>
+
+      <label className="mt-2 flex flex-col gap-1 text-[11px] text-dim">
+        API key
+        <input
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          type="password"
+          spellCheck={false}
+          placeholder={view?.key_hint ? `stored ${view.key_hint}, type to replace` : "sk-…"}
+          className="clay-field font-mono !text-[11.5px]"
+        />
+      </label>
+
+      <div className="mt-3 flex items-center gap-2">
+        <Button onClick={() => void save()}>Save model</Button>
+        {note && <span className="text-[11.5px] text-good">{note}</span>}
+        {error && (
+          <span role="alert" className="font-mono text-[11.5px] break-words text-bad">
+            {error}
+          </span>
+        )}
+      </div>
     </Panel>
   );
 }
@@ -221,6 +321,8 @@ export function Settings({
       <h1 className="text-[19px] font-[600] tracking-[-0.018em]">Settings</h1>
 
       <Tunnel info={tunnel} onChange={onTunnel} primary={!live} />
+
+      <ModelPanel />
 
       <Panel
         labelledBy="servers-title"

@@ -104,7 +104,7 @@ function FolderPicker({
   );
 }
 
-export function Projects() {
+export function Projects({ onOpen }: { onOpen: (row: ProjectEntry) => void }) {
   const [rows, setRows] = useState<ProjectEntry[] | null>(null);
   const [error, setError] = useState("");
   const [picking, setPicking] = useState(false);
@@ -162,7 +162,7 @@ export function Projects() {
           </div>
         </Panel>
       ) : (
-        <ul className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 md:grid-cols-2">
+        <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
           {rows.map((row) => (
             <li key={row.path} className="clay-panel flex items-center gap-3 px-4 py-3">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-ground font-mono text-[12px] text-dim">
@@ -172,9 +172,14 @@ export function Projects() {
                 <span className="truncate text-[13px] font-[550] text-ink">{row.name}</span>
                 <span className="truncate font-mono text-[10.5px] text-dim">{row.path}</span>
               </span>
-              <Button small onClick={() => void remove(row.path)} title={`Remove ${row.name}`}>
-                Remove
-              </Button>
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                <Button small primary onClick={() => onOpen(row)}>
+                  Open chat
+                </Button>
+                <Button small onClick={() => void remove(row.path)} title={`Remove ${row.name}`}>
+                  Remove
+                </Button>
+              </span>
             </li>
           ))}
         </ul>

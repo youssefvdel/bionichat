@@ -1,6 +1,7 @@
 //! bionichat shell: dashboard over an MCP registry, the local hub that
 //! aggregates every registered server, approval policy, and supervision.
 
+mod chat;
 mod hub;
 mod mcp;
 mod policy;
@@ -116,6 +117,7 @@ struct Dashboard {
 struct AppState {
     registry_path: PathBuf,
     projects_path: PathBuf,
+    chat: Arc<chat::Chat>,
     hub: Arc<Hub>,
     tunnel: TunnelManager,
     rows: Mutex<Vec<ServerRow>>,
@@ -191,6 +193,55 @@ fn store_rows(state: &AppState, rows: Vec<ServerRow>) {
 
 fn find_row<'a>(rows: &'a mut [ServerRow], name: &str) -> Option<&'a mut ServerRow> {
     rows.iter_mut().find(|row| row.name == name)
+}
+
+#[tauri::command]
+fn model_config(state: State<'_, AppState>) -> chat::ModelView {
+    state.chat.config().view()
+}
+
+/// Save the endpoint and model. An empty key keeps the stored one, so the UI
+/// can edit the URL without ever holding the secret.
+#[tauri::command]
+fn save_model(
+    base_url: String,
+    model: String,
+    api_key: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<chat::ModelView, String> {
+    let mut config = state.chat.config();
+    config.base_url = base_url.trim().to_string();
+    config.model = model.trim().to_string();
+    if let Some(key) = api_key {
+        let key = key.trim().to_string();
+        if !key.is_empty() {
+            config.api_key = key;
+        }
+    }
+    if config.base_url.is_empty() {
+        return Err("the base URL is required".to_string());
+    }
+    if config.model.is_empty() {
+        return Err("the model name is required".to_string());
+    }
+    state.chat.save(&config)
+}
+
+#[tauri::command]
+async fn chat_send(
+    project: String,
+    history: Vec<chat::ChatTurn>,
+    prompt: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<chat::ChatTurn, String> {
+    let chat = state.chat.clone();
+    let emitter = app.clone();
+    chat.send(&project, &history, &prompt, |event, payload| {
+        use tauri::Emitter;
+        let _ = emitter.emit(event, payload);
+    })
+    .await
 }
 
 /// A folder the user chose to work in.
@@ -405,6 +456,37 @@ fn window_minimize(app: AppHandle) -> Result<(), String> {
     app.get_webview_window("main")
         .ok_or_else(|| "no main window".to_string())?
         .minimize()
+        .map_err(|e| e.to_string())
+}
+
+/// The CEF runtime implements neither `data-tauri-drag-region` nor
+/// `start_dragging`, so the title bar moves the window itself: it reads where
+/// the window is, then asks for a new position on every pointer move.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WindowSpot {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[tauri::command]
+fn window_spot(app: AppHandle) -> Result<WindowSpot, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "no main window".to_string())?;
+    let position = window.outer_position().map_err(|e| e.to_string())?;
+    Ok(WindowSpot {
+        x: position.x,
+        y: position.y,
+    })
+}
+
+#[tauri::command]
+fn window_move(x: i32, y: i32, app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "no main window".to_string())?;
+    window
+        .set_position(tauri::PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())
 }
 
@@ -654,11 +736,36 @@ pub fn run() {
                 ..Default::default()
             });
             // New built-in tools join an existing registry; user servers win.
+            // A built-in whose binary is missing is repointed at this build:
+            // moving or renaming the project folder must not break the app.
             let mut added = false;
             for spec in registry::default_specs(&exe_dir, &file_root, &skills_dir) {
-                if !registry.servers.iter().any(|s| s.name == spec.name) {
-                    registry.servers.push(spec);
-                    added = true;
+                match registry.servers.iter_mut().find(|s| s.name == spec.name) {
+                    Some(existing) => {
+                        if let (
+                            registry::Transport::Stdio { command, .. },
+                            registry::Transport::Stdio {
+                                command: fresh,
+                                args,
+                                ..
+                            },
+                        ) = (&existing.transport, &spec.transport)
+                        {
+                            if !Path::new(command).exists() {
+                                log::info!("repointing {} at {fresh}", spec.name);
+                                existing.transport = registry::Transport::Stdio {
+                                    command: fresh.clone(),
+                                    args: args.clone(),
+                                    env: Default::default(),
+                                };
+                                added = true;
+                            }
+                        }
+                    }
+                    None => {
+                        registry.servers.push(spec);
+                        added = true;
+                    }
                 }
             }
             if registry.servers.is_empty() || added {
@@ -686,6 +793,10 @@ pub fn run() {
                 hub: hub.clone(),
                 tunnel,
                 projects_path: data_dir.join("projects.json"),
+                chat: Arc::new(chat::Chat {
+                    hub: hub.clone(),
+                    config_path: data_dir.join("model.json"),
+                }),
                 rows: Mutex::new(rows),
                 retries: Mutex::new(HashMap::new()),
             });
@@ -705,6 +816,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             dashboard,
             projects,
+            model_config,
+            save_model,
+            chat_send,
             add_project,
             remove_project,
             browse,
@@ -721,6 +835,8 @@ pub fn run() {
             tunnel_stop,
             tunnel_revoke,
             window_minimize,
+            window_spot,
+            window_move,
             window_toggle_maximize,
             window_close
         ])
