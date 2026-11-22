@@ -30,6 +30,16 @@ cannot be cross-compiled from this Linux box.
 
 ## Proven on Windows (22 Nov 2026)
 
+The 22 Nov build shipped with the tunnel inside and was proven end to end:
+
+- app running in the desktop session, hub on `127.0.0.1:8787`
+- bundled `cloudflared.exe` minted
+  `https://specially-yields-stamps-notification.trycloudflare.com`
+- over that public URL: `tools/list` returned the five `core_*` tools and
+  `core_bash` returned `public-windows-ok` with `C:\Users\Administrator`
+- one folder, zipped: `C:\Users\Administrator\bionichat-windows.zip` (25.6 MB)
+
+
 Built on the Windows PC with `cargo build --release` and run there:
 
 - The app starts and opens its window in the desktop session.
