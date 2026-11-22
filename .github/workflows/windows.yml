@@ -41,7 +41,7 @@ jobs:
 
       - name: Put the tunnel helper beside the app
         shell: bash
-        run: bun run tunnel:fetch
+        run: bun run tunnel:build
 
       - name: Pack the runnable folder
         shell: bash
@@ -51,7 +51,7 @@ jobs:
           cp target/release/fs.exe dist-windows/
           cp target/release/bash.exe dist-windows/
           cp target/release/skill.exe dist-windows/
-          cp target/release/cloudflared.exe dist-windows/
+          cp target/release/bionichat-tunnel.exe dist-windows/
           ls -la dist-windows
           powershell -NoProfile -Command "Compress-Archive -Path 'dist-windows\*' -DestinationPath 'bionichat-windows.zip' -Force"
 

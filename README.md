@@ -18,23 +18,21 @@ The model key lives in `model.json` (0600) and never reaches the page.
 
 ## The public link
 
-A chat app on the web cannot reach `127.0.0.1`, so the app puts a tunnel in
-front of the hub. Two helpers, chosen automatically:
+A chat app on the web cannot reach `127.0.0.1`, so the app publishes the hub
+through OpenTunnel:
 
-| helper | URL | where it comes from |
-|---|---|---|
-| `opentunnel` | stable, one per machine | used when you already have it (Linux/macOS) |
-| `cloudflared` | fresh on every start | **ships with the app**, nothing to install |
-
-`bun run build` downloads the cloudflared binary for your platform and puts it
-beside the app binary, so a copy of the build folder needs nothing installed.
-OpenTunnel wins when present because its URL survives restarts; cloudflared is
-the zero-setup fallback. Set `BIONICHAT_TUNNEL=cloudflared` to force the
-bundled one.
-
-Stop kills the tunnel and keeps the link reusable (OpenTunnel). Revoke burns
-it: OpenTunnel deletes the route, cloudflared simply dies and the next start
-mints a new URL. Either way a leaked link cannot be reused after Revoke.
+- **stable hostname per machine.** `https://<id>.opentunnel.xyz` comes from the
+  stored tunnel identity, so it survives restarts. Paste it into the chat once.
+- **nothing to install.** The app ships its own client, `bionichat-tunnel`,
+  beside `bionichat`. Upstream `opentunnel` refuses to build outside Unix (its
+  service speaks over a Unix socket), so bionichat builds the portable library
+  into a small foreground helper: `cargo build -p bionichat-tunnel`,
+  or `bun run tunnel:build` to build and place it.
+- **Stop** kills the helper and keeps the hostname. **Revoke** deletes the
+  tunnel server-side, so the next start mints a new hostname and a leaked link
+  is dead for good.
+- The helper uses the same profile and identity directory as the upstream CLI,
+  so an existing URL keeps working.
 
 ## Platforms
 

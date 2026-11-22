@@ -1,0 +1,14 @@
+[package]
+name = "bionichat-tunnel"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+
+[[bin]]
+name = "bionichat-tunnel"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+opentunnel = { path = "../../vendor/opentunnel" }
+tokio = { workspace = true }

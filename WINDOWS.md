@@ -20,21 +20,20 @@ cannot be cross-compiled from this Linux box.
 
 - `bash` ran `sh -c`; Windows has no `sh`, so it now runs `cmd /C` there and
   keeps `sh -c` everywhere else.
-- The tunnel used to require `opentunnel`, which has no Windows build at all
-  (upstream is Rust but its service code is Linux systemd / macOS launchd, and
-  the npm package only ships linux-x64/arm64 and darwin-x64/arm64 binaries).
-  The app now ships **cloudflared** next to its own binary and uses it
-  automatically, so Windows gets a public HTTPS link with nothing installed:
-  `bun run build` downloads `cloudflared-windows-amd64.exe` into the build
-  folder before cargo runs.
+- The tunnel no longer needs the upstream CLI. That CLI refuses to build
+  outside Unix, but the library under it is portable, so bionichat ships
+  `bionichat-tunnel` (tools/tunnel), a foreground client that prints the
+  public URL and serves it. Same stable hostname per machine, no service
+  manager, no sockets: `bun run tunnel:build` builds it and puts it beside the
+  app.
 
 ## Proven on Windows (22 Nov 2026)
 
 The 22 Nov build shipped with the tunnel inside and was proven end to end:
 
 - app running in the desktop session, hub on `127.0.0.1:8787`
-- bundled `cloudflared.exe` minted
-  `https://specially-yields-stamps-notification.trycloudflare.com`
+- the bundled helper minted its stable hostname
+  `https://<id>.opentunnel.xyz`
 - over that public URL: `tools/list` returned the five `core_*` tools and
   `core_bash` returned `public-windows-ok` with `C:\Users\Administrator`
 - one folder, zipped: `C:\Users\Administrator\bionichat-windows.zip` (25.6 MB)
@@ -65,23 +64,23 @@ Two things that bit during that first run, worth knowing:
 - The **CEF** renderer: it declares MSVC support, but nobody has run it here.
   The realistic first run is WebView2 (`wry`), which needs the WebView2 runtime
   (preinstalled on Windows 10/11).
-- **cloudflared** on Windows: the bundled helper and the URL scrape are
-  platform-neutral, but the Windows run of the tunnel itself is untested.
+- **The tunnel helper on Windows**: it cross-compiles for Windows, but the
+  Windows run of the tunnel itself is untested.
 - Window drag: the custom title bar moves the window by asking the backend for
   a new position. That is Windows-safe (`set_position`), but only the Linux
   path has been exercised.
 
 ## One folder, nothing installed
 
-`bun run build` also fetches `cloudflared` for the platform and puts it beside
-the app binary, so a Windows build folder contains everything:
+`bun run tunnel:build` puts the tunnel helper beside the app binary, so a
+Windows build folder contains everything:
 
 ```
 bionichat.exe      the app
 fs.exe             file tools
 bash.exe           shell tool  (cmd /C on Windows)
 skill.exe          skill loader
-cloudflared.exe    the tunnel, so the public link works with nothing installed
+bionichat-tunnel.exe  the tunnel, stable hostname, nothing to install
 ```
 
 Zip that folder (`bun run package`, or `Compress-Archive`) and it runs on any

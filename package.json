@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build && bun run tunnel:fetch",
+    "build": "vite build && bun run tunnel:build",
     "check": "tsc --noEmit",
     "dev": "vite",
     "debug-page": "bun run scripts/debug-page.mjs",
-    "tunnel:fetch": "bun run scripts/fetch-tunnel.mjs",
-    "package": "bun run scripts/package.mjs"
+    "package": "bun run scripts/package.mjs",
+    "tunnel:build": "bun run scripts/build-tunnel.mjs"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",
