@@ -125,6 +125,12 @@ fn docx_text(bytes: &[u8]) -> Result<String, String> {
                 b"br" | b"cr" => out.push('\n'),
                 _ => {}
             },
+            // <w:tab/> and <w:br/> are empty elements, not start/end pairs.
+            Ok(quick_xml::events::Event::Empty(event)) => match event.local_name().as_ref() {
+                b"tab" => out.push('\t'),
+                b"br" | b"cr" => out.push('\n'),
+                _ => {}
+            },
             Ok(quick_xml::events::Event::End(event)) => match event.local_name().as_ref() {
                 b"t" => in_text = false,
                 b"p" => out.push('\n'),
@@ -529,4 +535,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
     service.waiting().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    /// A .docx is a zip with word/document.xml inside; build the smallest real one.
+    fn docx(body: &str) -> Vec<u8> {
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut buffer);
+            let options: zip::write::SimpleFileOptions = Default::default();
+            writer.start_file("word/document.xml", options).unwrap();
+            writer
+                .write_all(format!("<w:document><w:body>{body}</w:body></w:document>").as_bytes())
+                .unwrap();
+            writer.finish().unwrap();
+        }
+        buffer.into_inner()
+    }
+
+    #[test]
+    fn docx_keeps_paragraphs_and_tabs() {
+        let bytes = docx(
+            "<w:p><w:r><w:t>First line</w:t></w:r></w:p>\
+             <w:p><w:r><w:t>Module</w:t></w:r><w:r><w:tab/><w:t>Marks</w:t></w:r></w:p>",
+        );
+        let text = docx_text(&bytes).expect("a real docx must read");
+        assert!(text.contains("First line"));
+        assert!(text.contains("Module\tMarks"), "tab must survive: {text:?}");
+        assert_eq!(text.matches('\n').count(), 2, "one line per paragraph");
+    }
+
+    #[test]
+    fn encrypted_or_renamed_doc_is_named_as_such() {
+        let mut ole = vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+        ole.extend_from_slice(&[0u8; 64]);
+        let error = docx_text(&ole).unwrap_err();
+        assert!(error.contains("password protected"), "{error}");
+    }
+
+    #[test]
+    fn a_pdf_named_docx_is_not_read_as_text() {
+        let error = docx_text(b"%PDF-1.7 not a zip at all").unwrap_err();
+        assert!(error.contains("zip") || error.contains("archive"), "{error}");
+    }
 }
