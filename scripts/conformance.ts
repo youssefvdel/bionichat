@@ -5,10 +5,14 @@
 //
 // Default target is the Windows machine's public tunnel.
 
+import { resolve } from "node:path";
+
 const url = process.argv[2] ?? "https://lzite2fohvo7.opentunnel.xyz/mcp";
 // One candidate per platform: the target machine is whichever link we hit.
 const SHOTS = [
   process.env.BIONICHAT_IMAGE,
+  // Shipped in the repo, so the image checks always have a subject.
+  resolve("docs/screenshot.png"),
   "C:\\Users\\Administrator\\Pictures\\Screenshots\\Screenshot 2026-11-22 072557.png",
   "/tmp/opencode/v1.png",
 ].filter((value): value is string => Boolean(value));
@@ -113,7 +117,7 @@ async function main() {
   const probe = await call("core_bash", { command: "echo %OS%" });
   const isWindows = (shellOf(probe.body)?.stdout ?? "").includes("Windows_NT");
   const path = isWindows ? `${DIR}\\probe.txt` : "/tmp/opencode/bionichat-conformance/probe.txt";
-  const images = isWindows ? SHOTS : ["/tmp/opencode/v1.png"];
+  const images = SHOTS;
   record("platform detected", true, isWindows ? "Windows" : "POSIX", probe.ms);
 
   // 3. Write
