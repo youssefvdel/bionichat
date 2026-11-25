@@ -1,5 +1,10 @@
 # bionichat
 
+[![desktop](https://github.com/youssefvdel/bionichat/actions/workflows/desktop.yml/badge.svg)](https://github.com/youssefvdel/bionichat/actions/workflows/desktop.yml)
+[![license](https://img.shields.io/badge/license-MIT-4c9dff)](LICENSE)
+[![version](https://img.shields.io/badge/version-0.1.0-4c9dff)](CHANGELOG.md)
+[![platforms](https://img.shields.io/badge/platforms-linux%20%C2%B7%20windows%20%C2%B7%20macos%20untested-8b92a0)](#platforms)
+
 Your own PC, from any chat. bionichat runs a small hub on your machine and
 gives a web AI like ChatGPT, Gemini or Claude your files, your shell and your
 skills, over plain MCP. Nothing is installed in the cloud: the chat calls a
@@ -19,6 +24,8 @@ the built-in tools.
 
 Verified on Linux and Windows 11: build, public link, tool calls, images,
 PDF/docx/xlsx, and a fresh unzip of the release folder.
+
+![The dashboard: every server and tool, a shell call running live](docs/screenshot.png)
 
 
 ## The public link
