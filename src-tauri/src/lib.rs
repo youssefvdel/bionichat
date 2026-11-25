@@ -750,8 +750,10 @@ fn sandbox_policy() -> tauri_runtime_cef::SandboxPolicy {
             return SandboxPolicy::Auto;
         }
     }
-    log::warn!(
-        "{} is not root-owned and setuid, which Chromium treats as fatal; \
+    // Not `log::warn`: the logger is not up this early, and this line matters
+    // when a user reads the terminal or a crash report.
+    eprintln!(
+        "bionichat: {} is not root-owned and setuid, which Chromium treats as fatal; \
          starting without its OS sandbox (the UI loads only local assets)",
         helper.display()
     );
