@@ -7,7 +7,7 @@ rust-version = "1.95"
 [dependencies]
 base64 = "0.22"
 pdf-extract = "0.12"
-quick-xml = "0.38"
+quick-xml = "0.42"
 zip = { version = "7", default-features = false, features = ["deflate"] }
 calamine = "0.33"
 rmcp = { workspace = true }
