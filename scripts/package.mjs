@@ -86,9 +86,12 @@ const archiveDir = resolve("dist");
 mkdirSync(archiveDir, { recursive: true });
 const archive = join(archiveDir, `bionichat-${platform}-${version}.zip`);
 if (process.platform === "win32") {
-  // Compress-Archive chokes on a 276 MB libcef.dll; the bsdtar that ships with
-  // Windows 11 writes the same zip from the staging folder.
-  execFileSync("tar", ["-a", "-c", "-f", archive, "-C", stage, "."], { stdio: "inherit" });
+  // Compress-Archive is slow on a 276 MB libcef.dll, and the `tar` on PATH in
+  // Git Bash is GNU tar, which reads `D:\...` as a remote host. Use the
+  // bsdtar Windows itself ships, by absolute path.
+  const bsdtar = "C:\\Windows\\System32\\tar.exe";
+  const tar = existsSync(bsdtar) ? bsdtar : "tar";
+  execFileSync(tar, ["-a", "-c", "-f", archive, "-C", stage, "."], { stdio: "inherit" });
 } else {
   execFileSync("zip", ["-rq", archive, "."], { cwd: stage, stdio: "inherit" });
 }
