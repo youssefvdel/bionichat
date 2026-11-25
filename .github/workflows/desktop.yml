@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: cargo build --release --workspace --exclude bionichat
 
-      - name: Build the app (WKWebView: CEF on macOS is unproven here)
+      - name: "Build the app (WKWebView: CEF on macOS is unproven here)"
         shell: bash
         run: |
           touch src-tauri/build.rs
@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist-macos
-          cp src-tauri/target/release/bionichat dist-macos/
+          cp target/release/bionichat dist-macos/
           cp target/release/fs dist-macos/
           cp target/release/bash dist-macos/
           cp target/release/skill dist-macos/
