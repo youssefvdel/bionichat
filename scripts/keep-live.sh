@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 # Keep the bionichat stack alive: the CEF app on a display.
-# Defaults to an isolated Xvfb (:98) so nothing ever appears on the real
-# desktop; DISPLAY_NUM=:0 puts it on the desktop instead.
+# Runs on the single shared agent desktop (:0, Selkies) — this box forbids
+# extra X servers (agent-desktop-guard kills any Xvfb/Xorg that is not the
+# agent desktop). Override with DISPLAY_NUM=<n> only for a short manual test.
 # Safe to kill any time.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG="/tmp/opencode/bionichat-live.log"
-DISPLAY_NUM="${DISPLAY_NUM:-:98}"
+DISPLAY_NUM="${DISPLAY_NUM:-:0}"
+
+# :0 is owned by the Selkies session and needs its per-run auth cookie.
+if [[ "$DISPLAY_NUM" == ":0" && -z "${XAUTHORITY:-}" ]]; then
+  XAUTHORITY="$(ls -d /run/user/"$(id -u)"/selkies-session-*/Xauthority 2>/dev/null | head -1)"
+  export XAUTHORITY
+fi
+export DISPLAY="$DISPLAY_NUM"
 
 log() { echo "[$(date -u +%H:%M:%S)] keep-live: $*" >>"$LOG"; }
 
