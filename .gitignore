@@ -1,11 +1,5 @@
 /target
 node_modules/
-dist/main.js
-dist/main.js.map
+dist/
 *.log
 .DS_Store
-dist/_debug.html
-
-# packaged folders and archives
-dist/bionichat-*/
-dist/*.zip
