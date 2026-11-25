@@ -1,20 +1,25 @@
 # bionichat
 
-MCP dashboard shell. Tauri v3 (alpha) + Rust backend, CEF-capable renderer.
-Passes 1-4 of `PLAN.md`: the dashboard, a real registry, real file and shell
-MCP servers (`fs` with read/write/edit, `bash` with one shell tool), a
-local hub that aggregates them behind one MCP endpoint and forwards real
-input schemas, the OpenTunnel button, per-tool approval policy, and
-supervision. Every tool runs without asking: a web chat gives up in seconds,
-so an approval prompt reads as a broken bridge. Set a tool to Ask or Deny in
-Settings when you want a brake, and Revoke link is the real kill switch. Every
-result carries the server clock inside its own text block, because some
-clients render only one block.
+Your own PC, from any chat. bionichat runs a small hub on your machine and
+gives a web AI like ChatGPT, Gemini or Claude your files, your shell and your
+skills, over plain MCP. Nothing is installed in the cloud: the chat calls a
+public link, the link reaches your PC.
 
-The chat runs in the app: pick a project folder, talk to any
-OpenAI-compatible model, and its tool calls go back through the same hub, so
-policies, activity and the clock behave exactly as they do for a web client.
-The model key lives in `model.json` (0600) and never reaches the page.
+Dark desktop app (Tauri v3 alpha + Rust, bundled Chromium via CEF), React +
+Vite + Tailwind dashboard: Overview with a live map of every tool call,
+Projects as folder cards, Settings for the link, servers, per-tool policy and
+the built-in tools.
+
+- built-in tools: `core_read` (text, images, PDF, docx, xlsx), `core_write`,
+  `core_edit`, `core_bash`, `core_skill`
+- any MCP server can be added in Anthropic's `mcpServers` JSON shape; a
+  built-in one lives beside the app, an added one starts on its own
+- every call carries a server-time stamp so the model knows when it acted
+- packaging: one zip per platform, unzip and run, Chromium included
+
+Verified on Linux and Windows 11: build, public link, tool calls, images,
+PDF/docx/xlsx, and a fresh unzip of the release folder.
+
 
 ## The public link
 
