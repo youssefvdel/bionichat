@@ -8,7 +8,7 @@ rust-version = "1.95"
 base64 = "0.22"
 pdf-extract = "0.12"
 quick-xml = "0.38"
-zip = { version = "7", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 calamine = "0.33"
 rmcp = { workspace = true }
 serde_json = { workspace = true }
