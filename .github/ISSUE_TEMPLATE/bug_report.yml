@@ -1,0 +1,82 @@
+name: Bug report
+description: Something broke, or a chat could not reach your PC
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: the app shows its version in the sidebar, and the line
+        that matters most is whether the public link is `ready`.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From the sidebar, or the zip name.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux (X11)
+        - Linux (Wayland)
+        - Windows 11
+        - Windows 10
+        - macOS
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: Which chat was connected
+      options:
+        - ChatGPT
+        - Claude
+        - Gemini
+        - OpenCode
+        - Other MCP client
+        - No chat, the local hub
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: What you clicked or called, in order.
+      placeholder: |
+        1. Start the link
+        2. In ChatGPT, ask it to run `ver`
+        3. It answers "..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Paste the tool result verbatim, including the `[server time ...]` line.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Linux: `~/.local/share/com.bionichat.app/`
+        Windows: `%APPDATA%\com.bionichat.app\`
+        `registry.json`, `settings.json`, `tunnel.log`. Remove anything private.
+      render: text

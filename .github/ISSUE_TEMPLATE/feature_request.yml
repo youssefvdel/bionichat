@@ -1,0 +1,23 @@
+name: Feature request
+description: Something the app should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the task, not the solution. "My chat cannot see the tab I have open" beats "add a browser tool".
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today
+      description: Which tool or screen you tried, and where it stopped.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea (optional)
+      description: If you have a shape in mind, say it. Constraints are welcome too.
