@@ -60,7 +60,7 @@ jobs:
           bun run package
           ls -la dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bionichat-windows
           path: dist/*.zip
@@ -113,7 +113,7 @@ jobs:
           ls -la dist-macos
           ditto -c -k --sequesterRsrc --keepParent dist-macos bionichat-macos.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bionichat-macos
           path: |
