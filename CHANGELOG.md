@@ -49,6 +49,10 @@ by hand.
   unzip cannot spawn an older `fs.exe`.
 - `.docx` tables keep their tabs (`<w:tab/>` is an empty XML element).
 - Excel workbooks stop at the text clamp instead of materialising every cell.
+- The packaged Linux app aborted on first launch ("SUID sandbox helper binary
+  was found, but is not configured correctly"): a zip cannot carry a setuid
+  helper, so the app now detects that and starts Chromium with `--no-sandbox`,
+  logging one warning. `SECURITY.md` says how to restore the sandbox.
 
 ### Security
 

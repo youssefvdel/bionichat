@@ -721,10 +721,48 @@ fn spawn_supervisor(app: AppHandle) {
     });
 }
 
+/// Chromium aborts at startup when it finds a `chrome-sandbox` helper beside the
+/// app that is not root-owned and setuid: it treats a broken helper as fatal and
+/// does not fall back to the user-namespace sandbox. A release zip cannot carry a
+/// setuid file, so in that case we ask the runtime to append `--no-sandbox`
+/// instead of dying. No helper at all is fine: Chromium picks its namespace
+/// sandbox then, and that path is left alone.
+#[cfg(feature = "cef")]
+fn sandbox_policy() -> tauri_runtime_cef::SandboxPolicy {
+    use tauri_runtime_cef::SandboxPolicy;
+
+    let helper = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("chrome-sandbox")));
+    let Some(helper) = helper else {
+        return SandboxPolicy::Auto;
+    };
+    if !helper.exists() {
+        return SandboxPolicy::Auto;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let Ok(meta) = helper.metadata()
+            && meta.uid() == 0
+            && meta.mode() & 0o4000 != 0
+        {
+            return SandboxPolicy::Auto;
+        }
+    }
+    log::warn!(
+        "{} is not root-owned and setuid, which Chromium treats as fatal; \
+         starting without its OS sandbox (the UI loads only local assets)",
+        helper.display()
+    );
+    SandboxPolicy::Disabled
+}
+
 fn builder() -> tauri::Builder {
     #[cfg(feature = "cef")]
     {
-        tauri::Builder::default().runtime(tauri_runtime_cef::Cef::default())
+        tauri::Builder::default()
+            .runtime(tauri_runtime_cef::Cef::default().sandbox(sandbox_policy()))
     }
     #[cfg(not(feature = "cef"))]
     {

@@ -24,6 +24,20 @@ Known limits, stated plainly:
   want file access.
 - Images are served from `/files/<token>/<name>` while the app is running; the
   token is random and the store is in memory only.
+- **Chromium's OS sandbox on Linux.** Chromium aborts when it finds a
+  `chrome-sandbox` helper beside the app that is not root-owned and setuid, and
+  a zip cannot carry a setuid file. When that is the case bionichat starts the
+  bundled Chromium with `--no-sandbox` and logs one warning: the window stays
+  its own process, but without the kernel sandbox. The UI only ever loads
+  local assets, never remote pages. To keep the sandbox, do what a package
+  manager would do:
+
+  ```bash
+  sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
+  ```
+
+  On Windows the Windows sandbox is unavailable to any CEF embedder that is not
+  hosted by CEF's own `bootstrap.exe`; CEF turns it off itself.
 
 ## Reporting
 
