@@ -90,3 +90,36 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - Name: bionichat locked and applied to crate, productName, identifier and window title 2026-11-20. Google sign-in (moves with chats phase).
 - Scaffold: DONE 2026-11-20 (P1). Renderer: CEF is now the default on Linux and Windows (proven building and painting on both, 2026-11-22); `wry` stays as the opt-out and as the macOS CI path.
 - CEF gate: RESOLVED 2026-11-20 — `tauri-runtime-cef` alpha.7 builds and renders the dashboard (gtk4). 2026-11-21: the full P3 dashboard renders on CEF (chip reads "cef"); no sudo needed via `scripts/run-cef.sh`, which points `CHROME_DEVEL_SANDBOX` at the root-owned helper. Still open: CEF idle RSS vs wry before chats.
+
+## P13: UI rebuild (2026) and real installers
+
+Decided 2026-11-26 after checking live registries and current docs (versions
+verified that day, not from memory):
+
+| job | choice | verified |
+|---|---|---|
+| components | shadcn/ui CLI 4.23.1, Base UI primitives, preset nova (Geist + Lucide) | npm `shadcn@4.23.1`, `@base-ui/react@1.9.0` |
+| styling | Tailwind 4.3.5, CSS-first `@theme`, no config file | npm `tailwindcss@4.3.5` |
+| framework | React 19.3.1 + Vite 8.3.8 + `@vitejs/plugin-react` 6.3.0 | npm |
+| types | TypeScript 7.0.2 (native compiler); `tsc --noEmit` clean on this tree | npm, run 2026-11-26 |
+| motion | `motion` 14.14.0 (`motion/react`), reduced-motion honoured | npm |
+| map | `@xyflow/react` 13.0.3 stays | npm |
+| icons | `lucide-react` 1.81.0 | npm |
+| fonts | `@fontsource-variable/geist` + `geist-mono` 5.3.0, self-hosted | npm |
+
+Rejected: Radix as the base for new components (Base UI took over as the
+shadcn default in July 2026; Radix still supported but slower); MUI/Mantine
+(whole-library look, not a token system); hand-rolled components without a
+headless base (current state, and it is why the UI drifts).
+
+Installers: Tauri v3's own bundler already ships the CEF runtime — `libcef` next
+to the exe on Windows, under `/usr/share/<product>` in deb/rpm, framework plus
+five helper apps in the macOS `.app` — and the deb/rpm packages install
+`chrome-sandbox` setuid 4755, which removes the sandbox workaround for packaged
+Linux builds. Targets: NSIS (Windows), deb + rpm + AppImage (Linux), dmg/.app
+(macOS). Constraint: tool servers and the tunnel helper must resolve from
+Tauri's resource dir, not only beside the exe.
+
+Rule added to the global AGENTS.md the same day: research the live version and
+current docs before choosing any tool, and name the alternative that lost.
+
