@@ -8,9 +8,10 @@ Debug binary 191 MB; release size to be measured.
 
 Step 1b result (2026-11-26): a 200-line Rune example rendered sidebar + strip
 + nodes + **wires** + rail at 1280×720 in a 3.09 s incremental build
-(`docs/spike/rune-overview.png`). The drawing works, but the graph is not what
-we want: the same example is rewritten as the **live board** (no canvas, no
-nodes), which is both the product decision and less code.
+(`docs/spike/rune-overview.png`, kept only as history). The graph is dropped;
+the same 200 lines are now the **live board** — `RUNNING` + `RECENT` + server
+list, no canvas (`docs/spike/rune-board.png`). 3 s incremental build, 374
+draw instances, 345 glyphs.
 Supersedes `docs/specs/ui-rebuild.md` **as an implementation plan**. That file
 stays as the design source of truth: problem statement, tokens, anatomy,
 states, trust copy and the CEF-era checks all still apply. What changes is how
@@ -165,8 +166,9 @@ Scenes: `first-run`, `idle`, `busy`, `offline`, `external`, `error`,
 1. **Toolchain spike.** Clone Rune at a pinned rev; build `examples/hello` and
    render it headless. Check: `--snap` writes a PNG, `--tree` prints the switch
    with role/label, `cargo build` exit 0.
-2. **App crate skeleton.** `apps/desktop` with a window, tokens, sidebar, strip,
-   and three empty views on fake state. Check: `--snap` of each view; no
+2. **App crate skeleton.** `apps/desktop` (own workspace, Rune pinned to
+   `4918969f`, patches at the same rev) with a window, tokens, sidebar, strip,
+   the live board on fake state, and two empty views. Check: `--snap` of each view; no
    clipping at 1280×720; `cargo clippy` clean.
 3. **Fonts and type.** Register Geist + Geist Mono TTFs, set the ramp. Check:
    snapshot shows both faces; a mono URL and a tabular count align.
