@@ -251,19 +251,16 @@ async function main() {
   }
 
   // 9c. Office files: text out of a docx and an xlsx, no client support needed
-  const officeCases = isWindows
-    ? [
-        { kind: "docx", path: "C:\\Users\\Administrator\\Downloads\\26CSCI05I_Report_Template_CLEAN.docx" },
-        { kind: "xlsx", path: "C:\\Users\\Administrator\\Downloads\\Audit logs\\AUDIT moodle sync app.xlsx" },
-      ]
-    : [
-        { kind: "docx", path: "/tmp/opencode/note.docx" },
-        { kind: "xlsx", path: "/tmp/opencode/marks.xlsx" },
-      ];
+  // Repo fixtures first: the check runs on any machine with no setup. On
+  // Windows the path is translated to the remote machine's share of this repo
+  // by the caller, so the relative fixture is the only candidate needed.
+  const officeCases = [
+    { kind: "docx", path: resolve("tests/fixtures/note.docx") },
+    { kind: "xlsx", path: resolve("tests/fixtures/marks.xlsx") },
+  ];
   for (const office of officeCases) {
     const doc = await call("core_read", { path: office.path });
     const text = textOf(doc.body);
-    if (/No such file|not a file|could not be read: No such/i.test(text)) continue;
     record(
       `core_read reads .${office.kind} as text`,
       text.includes(`is a ${office.kind} document`),

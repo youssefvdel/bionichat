@@ -101,15 +101,21 @@ without a remote-debugging port that release builds refuse to open. DOM proof
 runs against `vite dev` in the in-app browser instead; Playwright returns when
 there is a web build worth testing end to end.
 
-### Skipped on purpose
+### State and forms: added after the second review
 
-- **State library** (zustand 5.1.0, jotai 3.0.2, react-query 5.108.4): the app
-  holds a handful of invokes and one event stream. React state is enough until
-  a second consumer appears.
-- **Forms** (react-hook-form 7.92.0, zod 4.6.7): no real form yet; the
-  add-server box is one textarea with JSON validation on the Rust side.
+- **zustand 5.1.0** for servers, tunnel, approvals and activity. The Tauri event
+  stream is push-based and three views read the same state, so prop drilling is
+  the current pain. Rejected react-query 5.108.4 (REST caching model, wrong
+  shape for IPC events) and jotai 3.0.2 (atom-per-field is more ceremony here).
+- **react-hook-form 7.92.0 + zod 4.6.7** for the Add-MCP JSON box only. Zod
+  reports the exact JSON path of a bad paste; the Rust side already validates
+  again before saving. Used nowhere else.
+
+### Skipped on purpose
 - **Tables/charts** (react-table 9.3.1, recharts 3.11.1): nothing to tabulate or
   chart.
+- **Playwright**: see above; the dev server plus the in-app browser is the DOM
+  oracle for this pass.
 - **Markdown/Shiki**: no chat, no rendered output.
 
 ## Integration facts taken from the docs, not memory
@@ -128,13 +134,24 @@ there is a web build worth testing end to end.
 5. Vitest 5 needs an explicit `vite` peer (Bun installs peers automatically, so
    this is satisfied here).
 
-## What must be proven during implementation
+## Proven in the spike, 2026-11-26 (`/tmp/opencode/ui-spike`)
 
-- `shadcn add` writes Base UI components into this repo with the alias setup
-  (prove with one component before adding twelve).
-- Base UI 1.9 + React 19.3 + TS 7: typecheck and runtime, no `asChild` habits.
+- `shadcn init -b base -p nova` on an existing Vite + Tailwind v4 project:
+  detected Vite, validated the alias, wrote `components.json` with
+  `"style": "base-nova"`, installed `@base-ui/react ^1.9.0`, `cn ^0.5.2`,
+  Geist, lucide and tw-animate-css.
+- `shadcn add button dialog select tooltip sonner badge separator`: 7 files,
+  no errors.
+- A page using Button, Dialog, Select, Tooltip and sonner: `tsc --noEmit` exit
+  0, `vite build` green. Spike bundle 437 kB js / 39 kB css, fonts emitted.
+- **TypeScript 7 removed `baseUrl`** (TS5102): the alias must be `paths` only.
+
+## What must still be proven during implementation
+
 - `cn` 0.5.2 behaves like `clsx`+`tailwind-merge` on conditional classes; swap
   to the fallback if any class merge is wrong.
 - Motion respects reduced motion inside CEF, not only in Chrome.
-- Tailwind 4.3 output looks identical in Chromium 156 (CEF) and the dev browser.
-- Bundle cost: measure `dist` size before and after. A 20% jump needs a reason.
+- Tailwind 4.3 output looks identical in Chromium **154** (this app's CEF,
+  `cef 154.5.0+154.0.34`) and the dev browser.
+- Base UI Dialog focus trap inside CEF.
+- Bundle cost: measure `dist` before and after. A 20% jump needs a reason.

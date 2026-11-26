@@ -259,11 +259,12 @@ backend; the UI shows key names only.
 
 ## State and secrets
 
-- Registry: `<app data dir>/registry.json`, seeded with the two demo servers on
-  first launch.
-- Demo filesystem root: `<app data dir>/demo-root`.
-- No shell/fs plugin is installed; the only filesystem access is `demo-fs`,
-  which canonicalises every path and rejects escapes.
+- Registry: `<app data dir>/registry.json`, seeded with the built-in servers
+  (`fs`, `bash`, `skill`) on first launch.
+- Built-in tool binaries are resolved beside the running app, so a moved or
+  reinstalled folder keeps working; user-added servers keep their own command.
+- `core_read` canonicalises every path and `core_write` creates missing parents;
+  there is no filesystem plugin beyond these tools.
 
 ## Pinned versions
 
@@ -301,8 +302,8 @@ Verified 2026-11-20 on this box (tunnel `kfgepc72im6k.opentunnel.xyz`):
 | --- | --- |
 | app `Start tunnel` | `ready`, URL shown in the card |
 | TLS chain | `ZeroSSL ECC DV SSL CA 2`, openssl verify `0 (ok)` |
-| `POST /mcp tools/list` from the internet | `demo-ping__ping`, `demo-ping__echo`, `demo-fs__fs.read` |
-| `POST /mcp tools/call demo-ping__ping` | `pong` |
+| `POST /mcp tools/list` from the internet | `core_read`, `core_write`, `core_edit`, `core_bash`, `core_skill` |
+| `POST /mcp tools/call core_bash` | `exit_code 0`, stdout plus the server-time stamp |
 | app `Stop` | service stopped, public URL stops answering |
 
 ## Known gaps (next passes)
