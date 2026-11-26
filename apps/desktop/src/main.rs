@@ -3,7 +3,7 @@
 //! radius 10 panels / 6 rows, mono for commands. Fake data for now.
 #![forbid(unsafe_code)]
 
-use rune::{col, color, el, row, text, AppSpec, Color, Cx, El, TextStyle};
+use rune::{canvas, col, color, el, row, text, AppSpec, Area, Color, Cx, El, FillRule, Path, Shape, TextStyle, Tx};
 
 fn c(hex: &str) -> Color {
     color::hex(hex).unwrap_or(Color::BLACK)
@@ -42,6 +42,69 @@ fn code() -> TextStyle {
     TextStyle::new(13.0, 440.0).mono().lh(20.0).tracking(-0.04)
 }
 
+/// The bionichat mark: four white strokes on a dark rounded square, drawn from
+/// assets/logo/bionichat-master.svg (paths are in a 256 unit box).
+const LOGO: [&str; 4] = [
+    "M 133 45 L 65 45 L 45 65 L 45 133 L 51.5 139.5 L 72 119 L 72 75 L 75 72 L 119 72 L 139.5 51.5 Z",
+    "M 197.5 45 L 160 45 L 45 160 L 45 197.5 Z",
+    "M 58.5 211 L 96 211 L 211 96 L 211 58.5 Z",
+    "M 123 211 L 191 211 L 211 191 L 211 123 L 204.5 116.5 L 184 137 L 184 181 L 181 184 L 137 184 L 116.5 204.5 Z",
+];
+
+fn logo(size: f32) -> El {
+    let k = size / 256.0;
+    let mut mark = el()
+        .size(size, size)
+        .radius(size * 0.22)
+        .fill(c("#171719"))
+        .border_sides([1.0, 1.0, 1.0, 1.0], c("#2d2d32"))
+        .clip_rounded(size * 0.22);
+    for d in LOGO {
+        let area = Area::new(&Path::from_svg(d), FillRule::NonZero);
+        let shape = Shape::new().fill_area(&area, Color::WHITE);
+        mark = mark.child(canvas(shape).size(256.0, 256.0).origin(0.0, 0.0).scale(k).absolute(0.0, 0.0));
+    }
+    mark
+}
+
+fn window_button(glyph: &str, action: fn(&mut Tx)) -> El {
+    row()
+        .size(28.0, 24.0)
+        .radius(R_ROW)
+        .no_window_drag()
+        .role("button")
+        .label(glyph)
+        .focusable(true)
+        .items_center()
+        .child(text(glyph).font(ui()).color(c(TEXT_MUTED)))
+        .on_press_tx(move |_: &mut State, tx: &mut Tx| action(tx))
+}
+
+fn titlebar(s: &State) -> El {
+    row()
+        .w_full()
+        .h(36.0)
+        .padding(10.0)
+        .gap(8.0)
+        .items_center()
+        .fill(c(BG_BASE))
+        .border_sides([0.0, 0.0, 1.0, 0.0], c(HAIRLINE))
+        .window_drag()
+        .child(
+            text(match s.view {
+                View::Overview => "Overview",
+                View::Projects => "Projects",
+                View::Settings => "Settings",
+            })
+            .font(ui())
+            .color(c(TEXT_FAINT)),
+        )
+        .child(el().grow(1.0))
+        .child(window_button("−", |tx| tx.minimize()))
+        .child(window_button("□", |tx| tx.toggle_maximized()))
+        .child(window_button("✕", |tx| tx.close_window()))
+}
+
 fn dot(color: Color) -> El {
     el().size(6.0, 6.0).radius(3.0).fill(color)
 }
@@ -56,9 +119,11 @@ fn sidebar(s: &State) -> El {
         .border_sides([0.0, 1.0, 0.0, 0.0], c(HAIRLINE))
         .child(
             row()
-                .h(32.0)
+                .h(36.0)
                 .padding(8.0)
                 .gap(8.0)
+                .items_center()
+                .child(logo(22.0))
                 .child(text("bionichat").font(ui_med()).color(c(TEXT_BASE))),
         )
         .child(el().h(12.0))
@@ -276,21 +341,27 @@ struct State {
 }
 
 fn view(s: &State, _: &mut Cx<State>) -> El {
-    row()
+    col()
         .w_full()
         .h_full()
         .fill(c(BG_BASE))
-        .child(sidebar(s))
+        .child(titlebar(s))
         .child(
-            col()
+            row()
                 .grow(1.0)
-                .h_full()
-                .child(strip(s))
-                .child(match s.view {
-                    View::Overview => row().grow(1.0).h_full().child(board(s)).child(servers()),
-                    View::Projects => projects(),
-                    View::Settings => settings(s),
-                }),
+                .w_full()
+                .child(sidebar(s))
+                .child(
+                    col()
+                        .grow(1.0)
+                        .h_full()
+                        .child(strip(s))
+                        .child(match s.view {
+                            View::Overview => row().grow(1.0).h_full().child(board(s)).child(servers()),
+                            View::Projects => projects(),
+                            View::Settings => settings(s),
+                        }),
+                ),
         )
 }
 

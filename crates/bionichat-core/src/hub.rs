@@ -972,12 +972,12 @@ mod tests {
     }
 
     fn ensure_demo_binaries(dir: &Path) {
-        for name in ["fs", "bash", "skill"] {
+        for name in ["core"] {
             if dir.join(name).exists() {
                 continue;
             }
             let status = std::process::Command::new("cargo")
-                .args(["build", "-p", "fs", "-p", "bash", "-p", "skill", "--quiet"])
+                .args(["build", "-p", "core", "--quiet"])
                 .current_dir(env!("CARGO_MANIFEST_DIR"))
                 .status()
                 .expect("cargo build for demo servers");
@@ -1063,10 +1063,11 @@ mod tests {
             .iter()
             .find(|tool| tool.get("name").and_then(Value::as_str) == Some("core_bash"))
             .expect("bash in union");
-        assert_eq!(
-            bash_tool.pointer("/inputSchema/required"),
-            Some(&json!(["command"])),
-            "bash's required params must reach the client: {bash_tool}"
+        // `command` is optional because a call may instead read or kill a job.
+        assert!(
+            bash_tool.pointer("/inputSchema/properties/command").is_some()
+                && bash_tool.pointer("/inputSchema/properties/job").is_some(),
+            "bash must offer command and job: {bash_tool}"
         );
     }
 
@@ -1079,7 +1080,7 @@ mod tests {
             .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
-        hub.registry_mut_allow("bash", "bash");
+        hub.registry_mut_allow("core", "bash");
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
@@ -1140,8 +1141,8 @@ mod tests {
             .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
-        hub.registry_mut_allow("fs", "write");
-        hub.registry_mut_allow("fs", "read");
+        hub.registry_mut_allow("core", "write");
+        hub.registry_mut_allow("core", "read");
         let (_, body) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
@@ -1218,7 +1219,7 @@ mod tests {
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
-        registry.set_policy("bash", "bash", Decision::Deny);
+        registry.set_policy("core", "bash", Decision::Deny);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let (_, body) = hub
@@ -1233,9 +1234,7 @@ mod tests {
         );
         // The warm list above legitimately started sessions; the denied call
         // itself must not start anything new, so it forgets nothing either.
-        hub.forget("bash");
-        hub.forget("fs");
-        hub.forget("skill");
+        hub.forget("core");
         assert_eq!(hub.session_count(), 0, "denied call must not spawn a server");
     }
 
@@ -1249,7 +1248,7 @@ mod tests {
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
-        registry.set_policy("fs", "write", Decision::Ask);
+        registry.set_policy("core", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let (_, body) = hub
@@ -1272,7 +1271,7 @@ mod tests {
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
-        registry.set_policy("fs", "write", Decision::Ask);
+        registry.set_policy("core", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
         let call = || {
             let hub = hub.clone();
@@ -1314,7 +1313,7 @@ mod tests {
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
-        registry.set_policy("fs", "write", Decision::Ask);
+        registry.set_policy("core", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let task = {
@@ -1351,7 +1350,7 @@ mod tests {
     #[tokio::test]
     async fn every_result_carries_server_time() {
         let hub = test_hub("time");
-        hub.registry_mut_allow("bash", "bash");
+        hub.registry_mut_allow("core", "bash");
         let (_, list) = hub
             .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}))
             .await;
@@ -1472,8 +1471,8 @@ mod tests {
             "bionichat",
             "full permission",
             "server time",
-            "fs",
-            "bash",
+            "core_read",
+            "core_bash",
         ] {
             assert!(
                 instructions.contains(phrase),
@@ -1485,7 +1484,7 @@ mod tests {
     #[tokio::test]
     async fn bash_defaults_to_home_directory() {
         let hub = test_hub("home");
-        hub.registry_mut_allow("bash", "bash");
+        hub.registry_mut_allow("core", "bash");
         let (_, list) = hub
             .handle_rpc(json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}))
             .await;
@@ -1560,14 +1559,14 @@ mod tests {
         let feed = hub.activity();
         assert_eq!(feed.len(), 1, "one call recorded: {feed:?}");
         let entry = &feed[0];
-        assert_eq!(entry.server, "fs");
+        assert_eq!(entry.server, "core");
         assert_eq!(entry.tool, "read");
         assert_eq!(entry.status, "ok");
         assert!(!entry.time.is_empty(), "stamped with wall time");
 
         // A denied call lands in the feed too.
         let mut registry = hub.registry();
-        registry.set_policy("bash", "bash", Decision::Deny);
+        registry.set_policy("core", "bash", Decision::Deny);
         registry::save(&hub.registry_path, &registry).unwrap();
         let (_, denied) = hub
             .handle_rpc(json!({
@@ -1594,9 +1593,9 @@ mod tests {
             .handle_rpc(json!({"jsonrpc":"2.0","id":0,"method":"tools/list"}))
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
-        hub.registry_mut_allow("fs", "write");
-        hub.registry_mut_allow("fs", "edit");
-        hub.registry_mut_allow("fs", "read");
+        hub.registry_mut_allow("core", "write");
+        hub.registry_mut_allow("core", "edit");
+        hub.registry_mut_allow("core", "read");
         let (_, wrote) = hub
             .handle_rpc(json!({
                 "jsonrpc":"2.0","id":2,"method":"tools/call",
@@ -1658,7 +1657,7 @@ mod tests {
             .await;
         assert!(warm.expect("warm list").get("error").is_none());
         let mut registry = hub.registry();
-        registry.set_policy("fs", "write", Decision::Ask);
+        registry.set_policy("core", "write", Decision::Ask);
         registry::save(&hub.registry_path, &registry).unwrap();
 
         let task = {
