@@ -1,6 +1,10 @@
 # Spec — bionichat UI on Rune
 
 Status: **draft, round 0** (2026-11-26)
+
+Step 1 result: Rune `examples/hello` built in 2m57s on this box, rendered
+headless (`--snap` → 5,956-byte PNG, GPU init 2.1s, one frame, 12 instances).
+Debug binary 191 MB; release size to be measured.
 Supersedes `docs/specs/ui-rebuild.md` **as an implementation plan**. That file
 stays as the design source of truth: problem statement, tokens, anatomy,
 states, trust copy and the CEF-era checks all still apply. What changes is how
@@ -41,6 +45,27 @@ porting later (the UI is not built yet, so there is nothing to preserve).
   Vitest/Testing Library, Bun as the UI build, Tauri, CEF.
 - Stays: Rust workspace, `bionichat` lib (hub/policy/tunnel), `tools/*` MCP
   servers, `scripts/conformance.ts`, tests.
+
+## What changes in the backend — mostly nothing
+
+The MCP surface is the product contract, so it does not move: same tools, same
+names (`core_*`), same instructions, same server-time stamp inside the payload,
+same image URLs, same `-32001/32002/32602` codes.
+
+| area | change |
+|---|---|
+| `crates/bionichat` (hub, policy, registry) | **unchanged** except the two named additions |
+| `tools/fs`, `tools/bash`, `tools/skill`, `tools/tunnel` | **unchanged** |
+| `scripts/conformance.ts` | **unchanged**, must stay 19/19 |
+| `src-tauri` (commands, events, setup) | **deleted** — it is the Tauri adapter, not the product |
+| hub lifecycle | started in-process by the Rune app instead of Tauri `setup`; same port 8787 |
+| events | `HubEvent` over an `mpsc` channel to the view instead of Tauri `emit` |
+| `origin` + `ready (external)` | the two small additions already in step 8 |
+| packaging | Tauri bundler out; AppImage/deb/rpm/dmg/MSI in |
+
+So: the backend keeps its logic and its contract; it loses the Tauri adapter and
+gains a plain Rust handle. If any of the above turns out to be false while
+building, that is a plan defect and gets written down here.
 
 ## Architecture
 
@@ -133,8 +158,10 @@ Scenes: `first-run`, `idle`, `busy`, `offline`, `external`, `error`,
    clipping at 1280×720; `cargo clippy` clean.
 3. **Fonts and type.** Register Geist + Geist Mono TTFs, set the ramp. Check:
    snapshot shows both faces; a mono URL and a tabular count align.
-4. **Hub wiring.** Depend on `crates/bionichat`; start the hub in-process on
-   8787; feed servers/tools into state. Check: real `tools/list` fills the
+4. **Hub wiring.** Depend on `crates/bionichat`; replace the Tauri `AppHandle`
+   event sink with `HubHandle::start(..) -> (HubHandle, mpsc::Receiver<HubEvent>)`
+   and start it in-process on 8787; feed servers/tools into state. This is the
+   one structural refactor, and it touches no protocol behaviour. Check: real `tools/list` fills the
    sidebar; killing a server shows it quarantined within 5 s.
 5. **Map.** Layout hub→server→tool, draw wires, highlight a live call. Check:
    snapshot with a real `core_bash` running shows the accent path; idle shows

@@ -99,7 +99,7 @@ tokens, anatomy, states, copy); `docs/UI-STACK.md` holds the verified versions
 and the rejected alternatives. Do not duplicate the specs here.
 
 Status 2026-11-26: design intent frozen after 12 review rounds; implementation
-plan for Rune written, step 1 (toolchain spike) running.
+plan for Rune written; step 1 passed (hello built and rendered headless).
 
 Decided 2026-11-26 after checking live registries and current docs. Versions,
 sources and rejected alternatives: `docs/UI-STACK.md`.
