@@ -215,8 +215,9 @@ block, in `danger` text, before any button.
 3. `Paste it into ChatGPT, Claude or OpenCode` — one line naming where per
    client, no marketing copy.
 
-It disappears once the link is up and one call has arrived; Settings keeps a
-`Show the intro again` control. The strip, not the intro, is what teaches the
+It disappears once the link is up and one call has arrived, or when the user
+clicks `Hide`; Settings keeps a `Show the intro again` control, so a link that is
+up but unused never keeps the intro on the map forever. The strip, not the intro, is what teaches the
 state afterwards.
 
 ### Trust surface — what the user can always see
@@ -381,6 +382,11 @@ All versions verified 2026-11-26; full table and rejected alternatives in
       failure, not a skip.
     Check: all five rows pass, each with the command and its output quoted; at
    the 1280×720 minimum the strip stays on one line with ellipsis, never wraps.
+11b. **Docs match the screen.** Update `README.md` (map on Overview, link
+    blast radius, no stale demo claims) and regenerate `docs/screenshot.png`
+    from the new Overview in the built app.
+    Check: no README sentence names a screen that does not exist; the screenshot
+    is the new UI, same size budget as before (~90 KB).
 12. **Package regression.** `bun run package`, extract clean, run.
     Check: starts, 5 tools listed, one `core_bash` returns, closes.
 

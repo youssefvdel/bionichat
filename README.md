@@ -192,16 +192,17 @@ reseed over it.
 
 ## The live map
 
-Settings → Tools draws the hub, every server and every tool as a graph, and
-lights the path up while a call is in flight.
+Overview draws the hub, every server and every tool as a graph and lights the
+path while a call is in flight; the same screen carries the status strip and the
+live rail of calls (marked `local` or `link`). The public URL itself is never
+printed on Overview, only inside Settings → Link, where copying happens.
 
 Projects is a picker, not a listing: you choose any folder on this machine and
-it becomes a project the chat will work in. Saved in
-`<data>/projects.json`; a folder that later disappears drops itself. The public link itself is never printed there, only
-inside Settings → Tunnel, where copying happens. Projects lists the folders in `~/Projects` (your own
-work, not MCP servers). Everything about the bridge — servers, tool policies,
-the live map, the tunnel — lives in Settings, pinned to the bottom of the
-sidebar.
+it becomes a project the chat will work in. Saved in `<data>/projects.json`; a
+folder that later disappears drops itself.
+
+Servers, per-tool policies, approvals, the link and the file paths live in
+Settings, pinned to the bottom of the sidebar.
 
 - The hub emits `tool-start` the moment a call arrives, before policy runs,
   and `tool-activity` when it finishes. The graph marks the tool blue with a
@@ -294,7 +295,10 @@ One click runs `opentunnel route add <port>` (or `$OPENTUNNEL_BIN`), scrapes the
 - **Revoke link** burns the route (`opentunnel route remove`) and stops the
   service: the URL dies for good, the next start mints a fresh random one.
   Use it when a link leaks.
-- Public URL = public. It serves the hub as-is: demo data only, no auth.
+- Public URL = public. It serves the hub as-is with **no auth**: anyone holding
+  the URL can read, write and run shell commands on this machine until you
+  revoke it. That is the trade the link makes, and the app says so above the
+  Start button.
 
 Verified 2026-11-20 on this box (tunnel `kfgepc72im6k.opentunnel.xyz`):
 
