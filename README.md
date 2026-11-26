@@ -28,6 +28,10 @@ PDF/docx/xlsx, and a fresh unzip of the release folder.
 ![The dashboard: every server and tool, a shell call running live](docs/screenshot.png)
 
 
+## Handoff
+
+A fresh session starts here: [docs/HANDOFF.md](docs/HANDOFF.md).
+
 ## The public link
 
 A chat app on the web cannot reach `127.0.0.1`, so the app publishes the hub
