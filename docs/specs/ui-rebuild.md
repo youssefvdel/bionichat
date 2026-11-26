@@ -340,7 +340,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    Check: policy change persists to `registry.json`; Deny blocks a call
    (-32001); Ask opens the dialog and Approve lets the call through; Remove asks
    twice (label changes), then removes; Copy yields the full `…/mcp` URL; a bad
-   JSON paste shows `line X column Y`; Revoke still burns the route.
+   JSON paste shows `line X column Y` and the empty state carries a copyable
+   example (`{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}`); Revoke still burns the route.
 8. **Scale and restart truth.** 50 servers, 200-character paths, 10k-character
    output, one very long single line; then restart the app while the tunnel runs
    outside it.
