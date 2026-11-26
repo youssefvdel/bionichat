@@ -344,11 +344,13 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 5c. **External helper detection (the second backend change).** After a restart
     the app currently reports `off` even when a helper it did not start still
     holds the public URL. Read the stable hostname from
-    `$XDG_DATA_HOME/opentunnel/<profile>/tunnel.json`, probe the helper's lock
-    at `127.0.0.1:8789` (the helper binds `port + 2`), and only when both exist
-    and `GET https://<host>/mcp` answers, report `ready (external)` with that
-    URL. Otherwise report `off`. No new process is started; one unit test covers
-    the "lock free" and "hostname missing" paths.
+    `$XDG_DATA_HOME/opentunnel/default/tunnel.json` (`default` is the profile the
+    app's helper always uses) and probe the helper's lock on the hub port + 2
+    (8789 today; hold it in one constant). Only when both exist and a
+    **`POST /mcp` JSON-RPC `ping`** returns HTTP 2xx — `GET /mcp` is 405 by
+    design and proves nothing — report `ready (external)` with that URL.
+    Otherwise report `off`. No new process is started; one unit test covers the
+    "lock free" and "hostname missing" paths.
     While that state is current, **Start** and **Stop** are disabled with one
     line of why ("The link is running outside this app"); **Revoke** stays
     enabled and says what it does: it burns the route, so the public URL dies
