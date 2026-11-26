@@ -229,8 +229,9 @@ block, in `danger` text, before any button.
    client, no marketing copy.
 
 It disappears once the link is up and one call has arrived, or when the user
-clicks `Hide`; Settings keeps a `Show the intro again` control, so a link that is
-up but unused never keeps the intro on the map forever. The strip, not the intro, is what teaches the
+clicks `Hide` — that is the only way an up-but-unused link loses the intro, and
+Settings keeps `Show the intro again` so the blast-radius sentence is always one
+click away. The strip, not the intro, is what teaches the
 state afterwards.
 
 ### Trust surface — what the user can always see
@@ -310,8 +311,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    visible focus ring reached by Tab and no console errors. Automated axe and
    unit tests come with step 10, so lint green cannot stand in for looks.
 5. **Shell and store.** Titlebar keeps the hand-rolled drag (CEF has no Tauri
-   drag API); sidebar with Overview, Projects, Settings pinned bottom, logo
-   last. A `zustand` store holds servers, tunnel, approvals and activity, fed by
+   drag API); sidebar 224px fixed (one token, calmer than a range), Overview,
+   Projects at the top, Settings pinned bottom, logo last. A `zustand` store holds servers, tunnel, approvals and activity, fed by
    the Tauri event listeners once at the root.
    Check: `scrollWidth <= clientWidth` at 1280×720; Tab order matches visual
    order; active view has `aria-current="page"`.
