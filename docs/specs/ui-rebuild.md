@@ -202,8 +202,9 @@ label or a 6px-radius `Chip`; radii 22/16/999 → 12/8/6; Inter → Geist; the
 
 ### First run — the only path a new user sees
 
-On a fresh profile (no projects, link off, no calls yet) Overview shows a
-three-step **Connect a chat** block above the map, replacing the empty rail:
+On a fresh profile (no projects, link off, no calls yet) the **Connect a chat**
+block takes the rail's grid cell on the right of Overview, so the map keeps its
+place and nothing shifts when the intro goes away:
 
 The blast-radius sentence comes **first**: "Anyone with this URL can read,
 write and run commands on this computer." It is one line at the top of the
@@ -231,7 +232,7 @@ state afterwards.
   `—`, and the tool count comes from the live list, not from storage. Nothing
   claims a number it cannot prove. The strip shows the link state the app
   actually holds, including `ready (started outside the app)` when a
-  systemd-launched tunnel answers but this app did not start it — the state is
+  systemd-launched tunnel answers but this app did not start it. That state is
   written `ready (external)` everywhere, one string, no variant.
 - If the app closes while an approval is pending, the client receives `-32002`
   (unanswered) within its timeout and the rail records it; nothing is left

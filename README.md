@@ -286,7 +286,7 @@ One click runs `opentunnel route add <port>` (or `$OPENTUNNEL_BIN`), scrapes the
 
 - **Install** (user-local, no sudo, no account): `npm install -g --prefix "$HOME/.local" opentunnel`
   → `~/.local/bin/opentunnel` (6.5 MB). Removal: `npm uninstall -g --prefix "$HOME/.local" opentunnel`
-  and `rm -rf ~/.local/state/opentunnel`.
+  and `rm -rf ~/.local/share/opentunnel`.
 - **Side effect**: `route add` registers and enables a systemd *user* service
   (`opentunnel-default.service`) so the tunnel survives reboots. `Stop` runs
   `opentunnel down`, which stops it and removes that unit. Stop is per-profile,
