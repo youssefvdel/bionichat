@@ -144,9 +144,10 @@ Text: 12px/16 weight 550 (sm), 13px/18 weight 550 (md); letter-spacing 0.
 
 **Status strip** (top of Overview, 40px tall, no card): three segments separated
 by a 1px `border` rule, left to right: Link (`StatusDot` + mono host or `off`),
-Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`). The grid is
-`minmax(0,2fr) minmax(96px,1fr) minmax(120px,1fr)` plus the Revoke action, so a
-long hostname shrinks the link segment first, never the other two; every
+Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`), and the
+Revoke action. Four tracks:
+`minmax(0,2fr) minmax(96px,1fr) minmax(120px,1fr) auto`, so a long hostname
+shrinks the link segment first, never the others; every
 segment is `min-width: 0` with `text-overflow: ellipsis` on the mono value and
 the full value in a `title`; the strip never wraps and never pushes Revoke off
 screen at the enforced 1280px minimum. Revoke sits at the right end as a ghost danger button, visible
@@ -239,12 +240,16 @@ state afterwards.
   armed state resets after 5s or when focus leaves the button, and only one
   two-step control can be armed at a time.
 - Each rail entry shows `local` or `link`, so a shell command is never anonymous.
+- One privacy line in the Link group: "Results leave this computer. Anything a
+  tool reads — file text, image bytes, extracted PDF or Office text — is sent to
+  the chat you connected. Keep the link to people you trust with your files."
+  This is true of the rail's own previews too: they show what was sent.
 - After a restart: the rail is empty and says so, the last-call segment reads
   `—`, and the tool count comes from the live list, not from storage. Nothing
   claims a number it cannot prove. The strip shows the link state the app
   actually holds, including `ready (started outside the app)` when a
-  systemd-launched tunnel answers but this app did not start it. That state is
-  written `ready (external)` everywhere, one string, no variant.
+  systemd-launched tunnel answers but this app did not start it — written
+  `ready (external)` everywhere, never "started outside the app".
 - If the app closes while an approval is pending, the client receives `-32002`
   (unanswered) within its timeout and the rail records it; nothing is left
   hanging silently.
@@ -308,7 +313,9 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    the Tauri event listeners once at the root.
    Check: `scrollWidth <= clientWidth` at 1280×720; Tab order matches visual
    order; active view has `aria-current="page"`.
-5a. **Origin field (the one backend change).** In `src-tauri/src/hub.rs`, add
+5a. **Origin field (the one backend change).** `post_mcp` already takes the raw
+    body only; add `HeaderMap` to the handler and pass `host` down into the RPC
+    handler, or the comparison cannot exist. Then in `src-tauri/src/hub.rs`, add
     `origin: "local" | "link"` to the activity payload and the `tool-start`
     event. Derive it from the **`Host` header compared with the tunnel's
     hostname** — not the peer address, because the tunnel helper forwards to
@@ -323,7 +330,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     on it.
     Check: `cargo test -p bionichat --lib origin` green; a call to
     `127.0.0.1:8787` with `Host: 127.0.0.1:8787` records `local`, the same call
-    with the tunnel host records `link`.
+    with the tunnel host records `link`, and a real call over the public URL in
+    the app shows `link` in the rail.
 5b. **First run.** The Connect-a-chat block from P0, shown from a fixture.
     Check: fresh profile renders it; after a call it is gone; Settings can bring
     it back.
@@ -335,14 +343,20 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     and `GET https://<host>/mcp` answers, report `ready (external)` with that
     URL. Otherwise report `off`. No new process is started; one unit test covers
     the "lock free" and "hostname missing" paths.
+    While that state is current, **Start** and **Stop** are disabled with one
+    line of why ("The link is running outside this app"); **Revoke** stays
+    enabled and says what it does: it burns the route, so the public URL dies
+    even though the external helper keeps running.
     Check: start the helper by hand, restart the app, the strip says
-    `ready (external)`; kill the helper, the strip falls back to `off`.
+    `ready (external)`; both Start and Stop are disabled; kill the helper, the
+    strip falls back to `off`.
 6. **Overview, with states.** Status strip (link state, tool count, last call),
    map, live rail. Empty (no servers), loading (first list), error (hub down),
    offline (tunnel down but local hub up), quarantined server.
    Check: each state rendered from a fixture; a real `core_bash` lights hub →
    server → tool and shows running → ok with duration; rail keeps 50 newest and
-   marks the call `local` or `link`; Tab reaches every node once, Enter opens the
+   marks the call `local` or `link`, proven once over the public URL; Tab
+   reaches every node once, Enter opens the
    details, and the list toggle exposes the same rows.
 7. **Projects and Settings.** Folder picker behaviour unchanged. Settings
    grouped Link / Servers / Approvals / Files. The Link group keeps the existing
@@ -401,7 +415,9 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     blast radius, no stale demo claims) and regenerate `docs/screenshot.png`
     from the new Overview in the built app.
     Check: no README sentence names a screen that does not exist; the screenshot
-    is the new UI, same size budget as before (~90 KB).
+    is the new UI, same size budget as before (~90 KB); the renderer chip
+    (`cef` / `wry`) and an image result from `core_read` both still render, so
+    the rebuild did not quietly delete documented behaviour.
 11c. **Nothing existing is lost.** Before step 1, copy `registry.json`,
     `settings.json` and `projects.json` aside and record their sha256. After the
     rebuild, compare: no file is rewritten, no policy flips, no project drops.
@@ -420,6 +436,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 | Base UI + TS 7 friction | retired | spike passed |
 | Scope creep into features | high | non-goals; anything else becomes a note |
 | Bundle growth | low | baseline measured 2026-11-26: 502,503 B js + 43,406 B css; compare at steps 4 and 12 |
+| Result previews send file content to the model | accepted | inherent to a tool hub; stated on the Link card and in the README, not hidden |
+| No auth on the hub; loopback bind is not access control | accepted | the link is the control surface; Revoke is the kill switch, and the copy says so |
 
 ## Definition of done
 

@@ -297,8 +297,9 @@ One click runs `opentunnel route add <port>` (or `$OPENTUNNEL_BIN`), scrapes the
   Use it when a link leaks.
 - Public URL = public. It serves the hub as-is with **no auth**: anyone holding
   the URL can read, write and run shell commands on this machine until you
-  revoke it. That is the trade the link makes, and the app says so above the
-  Start button.
+  revoke it, and anything a tool reads (file text, image bytes, extracted PDF
+  text) is sent to the chat that asked. That is the trade the link makes, and
+  the app says so above the Start button.
 
 Verified 2026-11-20 on this box (tunnel `kfgepc72im6k.opentunnel.xyz`):
 
