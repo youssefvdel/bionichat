@@ -137,7 +137,7 @@ Text: 12px/16 weight 550 (sm), 13px/18 weight 550 (md); letter-spacing 0.
   Active: 1px down, no scale.
 - secondary: transparent fill, 1px `border strong`, text `text`. Hover: `panel raised`.
 - ghost: no border, text `muted`. Hover: `panel raised`, text `text`.
-- danger: text `danger`, 1px `danger` at 40% alpha. Hover: danger at 12% alpha fill.
+- danger: text `danger`, 1px `danger` at 60% alpha. Hover: danger at 14% alpha fill.
 - disabled: 45% opacity, no hover, cursor not-allowed.
 
 **IconButton.** 28×28, radius 8, icon 14px stroke 1.5, tooltip on hover and focus.
@@ -154,8 +154,8 @@ screen at the enforced 1280px minimum. Revoke sits at the right end as a ghost d
 only while the link is up.
 
 **StatusDot.** 6px circle plus a 12px label, gap 6, one size everywhere (strip,
-rail header, map node). Never a filled pill. ok `#3ecf8e`, warn `#d8a04a`,
-danger `#ff6b76` (the same value as danger text), idle `#8f97a5`. Never a filled pill.
+rail header, map node). ok `#3ecf8e`, warn `#d8a04a`, danger `#ff6b76` (the same
+value as danger text), idle `#8f97a5`. Never a filled pill.
 
 **Activity rail.** Fixed 320px column, scrolls internally, max-height = viewport
 minus the strip. Each entry: 3px left bar in the status colour; header row 28px
