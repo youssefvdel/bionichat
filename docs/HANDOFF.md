@@ -1,6 +1,7 @@
 # Handoff — bionichat, 26 Nov 2026
 
-Read this first, then `PLAN.md` (section **P13**) and `README.md`.
+Read this first, then `docs/specs/ui-rebuild.md` (the plan of record),
+`PLAN.md` (section **P21**) and `README.md`.
 Written for a fresh chat with no memory of the work that produced it.
 
 ## What this is
@@ -46,7 +47,7 @@ one public HTTPS endpoint: `core_read`, `core_write`, `core_edit`, `core_bash`,
 ### 1. UI rebuild (the active task, planned)
 
 Goal: an interface that looks designed, not generated. Decisions already
-researched and recorded in `PLAN.md` P13:
+researched and recorded in `PLAN.md` P21 and `docs/UI-STACK.md`:
 
 - shadcn/ui CLI 4.23.1, **Base UI** primitives (`@base-ui/react` 1.9.0; Radix is
   no longer the default), preset `nova` (Geist + Lucide)
@@ -111,6 +112,6 @@ bun run package                    # zip into dist/, then extract and run it
 
 ## How to start in the new chat
 
-1. Say: "read docs/HANDOFF.md and PLAN.md P13".
+1. Say: "read docs/HANDOFF.md and docs/specs/ui-rebuild.md".
 2. Write the UI spec to a file before touching `src/`.
 3. Run the fresh-eyes review, then implement in small verified passes.

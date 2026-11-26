@@ -91,21 +91,20 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 - Scaffold: DONE 2026-11-20 (P1). Renderer: CEF is now the default on Linux and Windows (proven building and painting on both, 2026-11-22); `wry` stays as the opt-out and as the macOS CI path.
 - CEF gate: RESOLVED 2026-11-20 — `tauri-runtime-cef` alpha.7 builds and renders the dashboard (gtk4). 2026-11-21: the full P3 dashboard renders on CEF (chip reads "cef"); no sudo needed via `scripts/run-cef.sh`, which points `CHROME_DEVEL_SANDBOX` at the root-owned helper. Still open: CEF idle RSS vs wry before chats.
 
-## P13: UI rebuild (2026) and real installers
+## P21: UI rebuild (2026) and real installers
+
+**The plan of record is `docs/specs/ui-rebuild.md`** (12 steps, each with a
+command or DOM check). `docs/UI-STACK.md` holds the verified versions and the
+rejected alternatives. This section only records what belongs to the wider
+plan; do not duplicate the spec here.
+
+Status 2026-11-26: spec at round 11, reviewed by three fresh-context lenses per
+round; design and zoom-out clean, readiness pending.
 
 Decided 2026-11-26 after checking live registries and current docs (versions
 verified that day, not from memory):
 
-| job | choice | verified |
-|---|---|---|
-| components | shadcn/ui CLI 4.23.1, Base UI primitives, preset nova (Geist + Lucide) | npm `shadcn@4.23.1`, `@base-ui/react@1.9.0` |
-| styling | Tailwind 4.3.5, CSS-first `@theme`, no config file | npm `tailwindcss@4.3.5` |
-| framework | React 19.3.1 + Vite 8.3.8 + `@vitejs/plugin-react` 6.3.0 | npm |
-| types | TypeScript 7.0.2 (native compiler); `tsc --noEmit` clean on this tree | npm, run 2026-11-26 |
-| motion | `motion` 14.14.0 (`motion/react`), reduced-motion honoured | npm |
-| map | `@xyflow/react` 13.0.3 stays | npm |
-| icons | `lucide-react` 1.81.0 | npm |
-| fonts | `@fontsource-variable/geist` + `geist-mono` 5.3.0, self-hosted | npm |
+Versions, sources and rejected alternatives: `docs/UI-STACK.md`.
 
 Rejected: Radix as the base for new components (Base UI took over as the
 shadcn default in July 2026; Radix still supported but slower); MUI/Mantine
