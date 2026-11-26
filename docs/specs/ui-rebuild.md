@@ -272,9 +272,11 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 
 1. **Dependencies, alias and window floor.** Exact versions (no `^` on
    Base UI/shadcn tooling); `@xyflow/react` moves to `dependencies`; `@types/node`
-   added for the config import. Alias is written in **two** places that must
-   agree: `tsconfig.json` `paths` (no `baseUrl`, TS 7 removed it) and
-   `vite.config.ts` `resolve.alias`. `src-tauri/tauri.conf.json` gets
+   added for the config import, and `vite.config.ts` joins `tsconfig.include`
+   so `bun run check` actually typechecks it. The alias token is **`@/*` →
+   `./src/*`**, written in **two** places that must agree: `tsconfig.json`
+   `paths` (no `baseUrl`, TS 7 removed it) and `vite.config.ts`
+   `resolve.alias`. `src-tauri/tauri.conf.json` gets
    `minWidth: 1280`, `minHeight: 720`, so the floor the spec tests is the floor
    the window enforces.
    Check: `bun install` clean, `bun run check` 0, `bun run build` green, and a
