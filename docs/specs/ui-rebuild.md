@@ -369,8 +369,9 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 7. **Projects and Settings.** Folder picker behaviour unchanged. Settings
    grouped Link / Servers / Approvals / Files. The Link group keeps the existing
    controls by name: **Start link when the app opens**, **Open with no window
-   next time**, and the last failure reason from `tunnel.log` when the link is
-   down — headless users must not lose setup they already rely on. The Link card states the blast
+   next time**, **Show the intro again** (so a hidden blast-radius warning can
+   always be recalled), and the last failure reason from `tunnel.log` when the
+   link is down — headless users must not lose setup they already rely on. The Link card states the blast
    radius in one sentence and puts **Revoke** beside the URL. Pending approvals
    render in a Dialog (Base UI) with Approve / Deny / Until-restart, plus a
    sonner toast on resolve; the store keeps the 5s poll as a fallback. Add-MCP
