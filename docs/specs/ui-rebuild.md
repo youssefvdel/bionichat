@@ -260,6 +260,12 @@ state afterwards.
   (unanswered) within its timeout and the rail records it; nothing is left
   hanging silently.
 
+### Map dropped (2026-11-26)
+
+The node map is **not** part of the UI. Overview shows live calls; servers are a
+plain list. Everything else in this file still stands. Sections about the map,
+`Shape` wires and node layout are history, not requirements.
+
 ## P1 — Grounded facts
 
 All versions verified 2026-11-26; full table and rejected alternatives in

@@ -6,13 +6,11 @@ Step 1 result: Rune `examples/hello` built in 2m57s on this box, rendered
 headless (`--snap` → 5,956-byte PNG, GPU init 2.1s, one frame, 12 instances).
 Debug binary 191 MB; release size to be measured.
 
-Step 1b result (map spike, 2026-11-26): a 200-line example draws the real
-Overview — sidebar, status strip, hub→server→tool nodes, **wires via
-`Shape::stroke_with`** (grey idle, accent live), and rail cards — at 1280×720
-in 3.09 s incremental build. Snapshot: `docs/spike/rune-overview.png`.
-83 layout nodes, 285 glyphs, first frame 203 ms (debug, one frame). The wires
-are straight L-routes in the spike; the plan still calls for beziers and lane
-routing.
+Step 1b result (2026-11-26): a 200-line Rune example rendered sidebar + strip
++ nodes + **wires** + rail at 1280×720 in a 3.09 s incremental build
+(`docs/spike/rune-overview.png`). The drawing works, but the graph is not what
+we want: the same example is rewritten as the **live board** (no canvas, no
+nodes), which is both the product decision and less code.
 Supersedes `docs/specs/ui-rebuild.md` **as an implementation plan**. That file
 stays as the design source of truth: problem statement, tokens, anatomy,
 states, trust copy and the CEF-era checks all still apply. What changes is how
@@ -123,13 +121,19 @@ Ship **Geist** + **Geist Mono** TTFs. Open question with a check: the npm
 Same three views and the same content as `ui-rebuild.md`. The pieces that need
 Rune-specific design:
 
-**Map.** A clipped canvas region with a `Shape` layer under the nodes.
-Wires are `Shape::new().stroke_with(points, false, 1.0, LineCap::Round, colour)`
-— verified present in `rune-core` and used by `examples/motion-bento`. Node
-positions are computed in Rust from the server/tool layout (no React Flow):
-hub on top, servers in rows, tools under each. The live path is a second stroke
-in `accent`, dashed by drawing segments, and pulses through `Live<f32>`.
-Zoom/pan: v1 is `fit` + list toggle only; the map is not a spatial editor.
+**Live board — no graph.** The Overview shows calls, not a node map. Two
+blocks in one scroll: `RUNNING` (accent left bar, elapsed time ticking, the
+command or path on the first line) and `RECENT` (newest first, status, tool,
+`local`/`link`, duration, output preview, 50 kept). A call arriving adds a card
+at the top of `RUNNING` and moves to `RECENT` when it finishes.
+
+A narrow right column lists the servers as plain rows — name, tool count, one
+status dot, last call — not boxes and wires. That is enough to answer "what is
+connected" without redrawing a graph.
+
+No canvas, no `Shape`, no layout engine: rows, text and two colours. The React
+Flow idea is dropped (user, 2026-11-26): the value is seeing calls happen, not a
+picture of the wiring.
 
 **Rail.** `LiveText` per entry for the running state (duration ticks, status),
 so a 4 s call does not rebuild the view every frame. Finished entries are plain
@@ -171,10 +175,13 @@ Scenes: `first-run`, `idle`, `busy`, `offline`, `external`, `error`,
    and start it in-process on 8787; feed servers/tools into state. This is the
    one structural refactor, and it touches no protocol behaviour. Check: real `tools/list` fills the
    sidebar; killing a server shows it quarantined within 5 s.
-5. **Map.** Layout hub→server→tool, draw wires, highlight a live call. Check:
-   snapshot with a real `core_bash` running shows the accent path; idle shows
-   no accent; 50-tool scene still renders in one snapshot.
-6. **Rail.** Cards with command/output, `local`/`link`, durations via LiveText.
+5. **Live board.** `RUNNING` and `RECENT` blocks, cards from real hub events,
+   elapsed time via `LiveText`. Check: a real 4 s `core_bash` appears instantly,
+   ticks, then moves to `RECENT` with `ok` and a duration; 50-entry cap holds;
+   the right column lists every server with a status dot.
+6. **Rail rules move here.** Cards keep the terminal anatomy from the design
+   file: `$` command line, mono output preview, `local`/`link`, 240 px cap,
+   horizontal scroll inside the card for one long line. Cards with command/output, `local`/`link`, durations via LiveText.
    Check: a 4 s call shows running → ok without rebuilding the view (assert the
    frame counter in `--tree`), 50-entry cap proven.
 7. **Projects and Settings.** Folder picker (Rust `rfd` or an in-app browser),
