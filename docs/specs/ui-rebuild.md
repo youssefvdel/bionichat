@@ -148,7 +148,7 @@ at the right end as a ghost danger button, visible only while the link is up.
 
 **StatusDot.** 6px circle plus a 12px label, gap 6, one size everywhere (strip,
 rail header, map node). Never a filled pill. ok `#3ecf8e`, warn `#d8a04a`,
-danger `#e0555f`, idle `#6b7280`. Never a filled pill.
+danger `#ff6b76` (the same value as danger text), idle `#6b7280`. Never a filled pill.
 
 **Activity rail.** Fixed 320px column, scrolls internally, max-height = viewport
 minus the strip. Each entry: 3px left bar in the status colour; header row 28px
@@ -255,7 +255,7 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    Check: `components.json` has `"style": "base-nova"`; `shadcn add button`
    writes a Base UI component; build green.
    Add only: `button dialog badge input textarea select scroll-area tooltip
-   skeleton separator card tabs`. Add nothing for calendar, chart, command,
+   skeleton separator card tabs sonner`. Add nothing for calendar, chart, command,
    menubar, carousel or data-table: no screen needs them.
 3. **Tokens and type.** `src/index.css` is the only file with colour literals:
    tokens, radii, type scale, focus ring, motion durations, grid variables.
@@ -276,12 +276,17 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    Check: `scrollWidth <= clientWidth` at 1280×720; Tab order matches visual
    order; active view has `aria-current="page"`.
 5a. **Origin field (the one backend change).** In `src-tauri/src/hub.rs`, add
-    `origin: "local" | "link"` to the activity payload and to the `tool-start`
-    event, derived from the socket peer address (loopback = `local`, anything
-    else = `link`). Mirror it in `src/types.ts`. One hub test asserts both
-    values; no other behaviour changes.
-    Check: `cargo test --lib` green; a call from `127.0.0.1:8787` records
-    `local`, a call through the tunnel records `link`.
+    `origin: "local" | "link"` to the activity payload and the `tool-start`
+    event. Derive it from the **`Host` header compared with the tunnel's
+    hostname** — not the peer address, because the tunnel helper forwards to
+    `127.0.0.1:8787` and every relayed call would look local. The hub already
+    receives the tunnel host for image URLs; reuse it. A request whose `Host`
+    matches the tunnel host is `link`; everything else is `local` (including
+    all traffic while the tunnel is down). Mirror the field in `src/types.ts`.
+    One hub test covers both host values; no other behaviour changes.
+    Check: `cargo test -p bionichat --lib origin` green; a call to
+    `127.0.0.1:8787` with `Host: 127.0.0.1:8787` records `local`, the same call
+    with the tunnel host records `link`.
 5b. **First run.** The Connect-a-chat block from P0, shown from a fixture.
     Check: fresh profile renders it; after a call it is gone; Settings can bring
     it back.
