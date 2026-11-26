@@ -1,6 +1,7 @@
 # Spec — bionichat UI rebuild
 
-Status: **draft, round 1** (round 0 reviewed by three fresh-context lenses)
+Status: **round 11** — panels of three fresh-context lenses; design and zoom-out
+clean, readiness pending the last fixes
 Date: 2026-11-26
 Owner: this session
 

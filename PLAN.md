@@ -98,13 +98,11 @@ command or DOM check). `docs/UI-STACK.md` holds the verified versions and the
 rejected alternatives. This section only records what belongs to the wider
 plan; do not duplicate the spec here.
 
-Status 2026-11-26: spec at round 11, reviewed by three fresh-context lenses per
-round; design and zoom-out clean, readiness pending.
+Status 2026-11-26: spec at round 11, three fresh-context lenses per round; design
+and zoom-out clean, readiness verifying the last fixes.
 
-Decided 2026-11-26 after checking live registries and current docs (versions
-verified that day, not from memory):
-
-Versions, sources and rejected alternatives: `docs/UI-STACK.md`.
+Decided 2026-11-26 after checking live registries and current docs. Versions,
+sources and rejected alternatives: `docs/UI-STACK.md`.
 
 Rejected: Radix as the base for new components (Base UI took over as the
 shadcn default in July 2026; Radix still supported but slower); MUI/Mantine
