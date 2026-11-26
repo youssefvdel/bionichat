@@ -5,8 +5,8 @@
   "identifier": "com.bionichat.app",
   "build": {
     "frontendDist": "../dist",
-    "beforeDevCommand": "bun run build && touch src-tauri/build.rs && cargo build -p fs -p bash -p skill",
-    "beforeBuildCommand": "bun run build && touch src-tauri/build.rs && cargo build -p fs -p bash -p skill"
+    "beforeDevCommand": "bun run build && touch src-tauri/build.rs && cargo build -p core",
+    "beforeBuildCommand": "bun run build && touch src-tauri/build.rs && cargo build -p core"
   },
   "app": {
     "withGlobalTauri": true,

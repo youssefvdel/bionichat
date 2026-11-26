@@ -114,4 +114,20 @@ bun run package                    # zip into dist/, then extract and run it
 
 1. Say: "read docs/HANDOFF.md and docs/specs/ui-rebuild.md".
 2. Write the UI spec to a file before touching `src/`.
-3. Run the fresh-eyes review, then implement in small verified passes.
+3. Run the fresh-eyes review, then implement in small verified passes.## State, 2026-11-26 (Rune pivot + one core server)
+
+- Shell decided: **Rune** (`appspec`/`El` UI, native GPU), not Tauri+CEF+React.
+  Plan: `docs/specs/ui-rune.md`. Design tokens/anatomy stay in
+  `docs/specs/ui-rebuild.md`. Map is dropped; Overview is a live call board.
+- `apps/desktop` is a standalone Rune workspace pinned at
+  `4918969f04dce020f63b34e024368a86e5e1857d` (all 8 `[patch.crates-io]` entries at
+  the same rev). Release binary: 43 MB. Headless proof:
+  `cargo run -- --snap out.png --scene busy --size 1280x720`.
+- Backend: one built-in server `core` (bash, read, write, edit, skill) replaces
+  the three servers `fs`, `bash`, `skill`. `bash` supports background jobs:
+  `{"background": true}` → `{job}`; `{"job": "<id>"}` reads it; `"kill": true`
+  stops it. Jobs are files in `~/.cache/bionichat/jobs/`.
+- Still pending: extract hub/policy/tunnel from `src-tauri` into a Tauri-free
+  crate so the Rune app starts the hub in-process; then Windows/macOS packaging.
+
+

@@ -1,5 +1,6 @@
-//! bionichat Overview as a live board: running calls, recent calls, plain
-//! server list. Fake data; proves the screen we actually want.
+//! bionichat Overview, styled from OpenCode Desktop's own theme tokens:
+//! grey-1100 ground, layer-01 panels, alpha hairlines, 13 px UI text,
+//! radius 10 panels / 6 rows, mono for commands. Fake data for now.
 #![forbid(unsafe_code)]
 
 use rune::{col, color, el, row, text, AppSpec, Color, Cx, El, TextStyle};
@@ -8,26 +9,37 @@ fn c(hex: &str) -> Color {
     color::hex(hex).unwrap_or(Color::BLACK)
 }
 
-const GROUND: &str = "#0e1014";
-const PANEL: &str = "#14171c";
-const RAISED: &str = "#191d23";
-const BORDER: &str = "#23272f";
-const TEXT: &str = "#e7e9ee";
-const MUTED: &str = "#9aa1ad";
-const FAINT: &str = "#8f97a5";
-const ACCENT: &str = "#4c9dff";
-const OK: &str = "#3ecf8e";
+// OpenCode theme: assets/theme.json (palette grey + alpha-light), numbers.
+const BG_BASE: &str = "#161616"; // grey-1100
+const BG_DEEP: &str = "#080808"; // grey-1200
+const LAYER_01: &str = "#242424"; // grey-1000
+const LAYER_02: &str = "#2e2e2e"; // grey-900
+const TEXT_BASE: &str = "#fafafa"; // grey-100
+const TEXT_MUTED: &str = "#aeaeae"; // grey-500
+const TEXT_FAINT: &str = "#808080"; // grey-600
+const ACCENT: &str = "#7698fd"; // blue-500
+const OK: &str = "#6bd586"; // green-500
+const DANGER: &str = "#f17471"; // red-500
 
-fn t(size: f32, weight: f32) -> TextStyle {
-    TextStyle::new(size, weight)
+const HAIRLINE: &str = "#ffffff1a"; // alpha-light-10
+const HAIRLINE_MUTED: &str = "#ffffff14"; // alpha-light-8
+const OVERLAY_HOVER: &str = "#ffffff0f"; // alpha-light-6
+
+const R_PANEL: f32 = 10.0;
+const R_ROW: f32 = 6.0;
+
+// OpenCode type: style.rs UI 13/440 lh 16 tracking -0.04, CODE 13/440 lh 20.
+fn ui() -> TextStyle {
+    TextStyle::new(13.0, 440.0).lh(16.0).tracking(-0.04)
 }
-
-fn label(s: &str) -> El {
-    text(s).font(t(11.0, 550.0).tracking(0.6)).color(c(FAINT))
+fn ui_med() -> TextStyle {
+    TextStyle::new(13.0, 530.0).lh(16.0).tracking(-0.04)
 }
-
-fn mono(s: &str, size: f32) -> El {
-    text(s).font(t(size, 400.0).mono()).color(c(MUTED))
+fn ui_small() -> TextStyle {
+    TextStyle::new(12.0, 440.0).lh(16.0)
+}
+fn code() -> TextStyle {
+    TextStyle::new(13.0, 440.0).mono().lh(20.0).tracking(-0.04)
 }
 
 fn dot(color: Color) -> El {
@@ -36,113 +48,158 @@ fn dot(color: Color) -> El {
 
 fn sidebar() -> El {
     col()
-        .w(224.0)
+        .w(240.0)
         .h_full()
         .padding(12.0)
-        .gap(4.0)
-        .fill(c("#111419"))
-        .border(1.0, c(BORDER))
-        .child(label("BIONICHAT"))
-        .child(el().h(8.0))
+        .gap(2.0)
+        .fill(c(BG_BASE))
+        .border_sides([0.0, 1.0, 0.0, 0.0], c(HAIRLINE))
+        .child(
+            row()
+                .h(32.0)
+                .padding(8.0)
+                .gap(8.0)
+                .child(text("bionichat").font(ui_med()).color(c(TEXT_BASE))),
+        )
+        .child(el().h(12.0))
         .child(nav("Overview", true))
         .child(nav("Projects", false))
         .child(el().grow(1.0))
         .child(nav("Settings", false))
-        .child(mono("v0.1.0", 11.0))
 }
 
 fn nav(name: &str, active: bool) -> El {
     row()
         .h(32.0)
         .padding(8.0)
-        .radius(8.0)
-        .fill(if active { c(RAISED) } else { Color::TRANSPARENT })
-        .child(text(name).font(t(13.0, if active { 600.0 } else { 400.0 })).color(if active { c(TEXT) } else { c(MUTED) }))
+        .radius(R_ROW)
+        .fill(if active { c(OVERLAY_HOVER) } else { Color::TRANSPARENT })
+        .child(
+            text(name)
+                .font(if active { ui_med() } else { ui() })
+                .color(if active { c(TEXT_BASE) } else { c(TEXT_MUTED) }),
+        )
 }
 
 fn strip(s: &State) -> El {
     row()
-        .h(40.0)
-        .padding(12.0)
-        .gap(24.0)
-        .border(1.0, c(BORDER))
-        .child(row().gap(6.0).child(dot(if s.tunnel { c(OK) } else { c(FAINT) })).child(mono(if s.tunnel { "kfgepc72im6k.opentunnel.xyz" } else { "off" }, 12.0)))
-        .child(row().gap(6.0).child(mono("5", 12.0)).child(label("TOOLS")))
-        .child(row().gap(6.0).child(mono(if s.running { "core_bash · running" } else { "—" }, 12.0)))
+        .h(44.0)
+        .w_full()
+        .padding(16.0)
+        .gap(20.0)
+        .border_sides([0.0, 0.0, 1.0, 0.0], c(HAIRLINE))
+        .items_center()
+        .child(
+            row()
+                .gap(8.0)
+                .items_center()
+                .child(dot(if s.tunnel { c(OK) } else { c(TEXT_FAINT) }))
+                .child(
+                    text(if s.tunnel {
+                        "kfgepc72im6k.opentunnel.xyz"
+                    } else {
+                        "link off"
+                    })
+                    .font(ui())
+                    .color(if s.tunnel { c(TEXT_MUTED) } else { c(TEXT_FAINT) }),
+                ),
+        )
+        .child(text(if s.running { "1 running" } else { "idle" }).font(ui()).color(c(TEXT_FAINT)))
         .child(el().grow(1.0))
-        .child(row().h(28.0).padding(10.0).radius(8.0).child(text("Revoke").font(t(12.0, 550.0)).color(c("#ff6b76"))))
+        .child(text("Revoke").font(ui()).color(c(TEXT_FAINT)))
+}
+
+fn section(title: &str) -> El {
+    text(title).font(ui_small()).color(c(TEXT_FAINT))
 }
 
 fn call_card(running: bool, tool: &str, cmd: &str, out: &str, dur: &str) -> El {
-    let accent = if running { c(ACCENT) } else { c(OK) };
-    row()
+    let state_color = if running { c(ACCENT) } else { c(OK) };
+    col()
         .w_full()
-        .radius(8.0)
-        .fill(c(PANEL))
-        .border(1.0, c(BORDER))
-        .child(el().w(3.0).fill(accent))
+        .gap(8.0)
+        .child(
+            row()
+                .w_full()
+                .gap(8.0)
+                .items_center()
+                .child(dot(state_color))
+                .child(text(tool).font(ui_med()).color(c(TEXT_BASE)))
+                .child(text(if running { "running" } else { "done" }).font(ui_small()).color(c(TEXT_FAINT)))
+                .child(el().grow(1.0))
+                .child(text(dur).font(ui_small()).color(c(TEXT_FAINT))),
+        )
         .child(
             col()
-                .grow(1.0)
-                .padding(12.0)
-                .gap(6.0)
-                .child(
-                    row()
-                        .w_full()
-                        .gap(8.0)
-                        .child(dot(accent))
-                        .child(text(tool).font(t(11.0, 550.0).mono()).color(c(TEXT)))
-                        .child(row().padding(6.0).radius(6.0).fill(c(RAISED)).child(text(if running { "link" } else { "local" }).font(t(11.0, 400.0).mono()).color(c(FAINT))))
-                        .child(el().grow(1.0))
-                        .child(mono(dur, 11.0)),
-                )
-                .child(text(cmd).font(t(12.0, 400.0).mono()).color(c(TEXT)))
-                .child(text(out).font(t(12.0, 400.0).mono()).color(c(MUTED))),
+                .w_full()
+                .padding(10.0)
+                .gap(4.0)
+                .radius(R_ROW)
+                .fill(c(BG_DEEP))
+                .child(text(cmd).font(code()).color(c(TEXT_BASE)))
+                .child(text(out).font(code()).color(if running { c(TEXT_FAINT) } else { c(TEXT_MUTED) })),
         )
 }
 
 fn board(s: &State) -> El {
-    let mut b = col().grow(1.0).h_full().padding(16.0).gap(8.0).fill(c(GROUND));
-    b = b.child(label("RUNNING"));
+    let mut inner = col().w_full().gap(10.0).child(section("RUNNING"));
     if s.running {
-        b = b.child(call_card(true, "bash", "$ sleep 4 && echo lit-up", "…", "1.2s"));
+        inner = inner.child(call_card(true, "bash", "$ sleep 4 && echo lit-up", "…", "1.2s"));
     } else {
-        b = b.child(row().h(56.0).padding(12.0).radius(8.0).border(1.0, c(BORDER)).child(text("No calls running. Start the link and connect a chat.").font(t(13.0, 400.0)).color(c(MUTED))));
+        inner = inner.child(
+            row()
+                .w_full()
+                .padding(12.0)
+                .radius(R_ROW)
+                .fill(c(LAYER_01))
+                .child(text("No calls running.").font(ui()).color(c(TEXT_MUTED))),
+        );
     }
-    b = b
-        .child(el().h(8.0))
-        .child(label("RECENT"))
+    inner = inner
+        .child(el().h(14.0))
+        .child(section("RECENT"))
         .child(call_card(false, "read", "README.md", "1: # bionichat", "4ms"))
         .child(call_card(false, "bash", "$ ls -la ~/Projects", "total 12  drwxr-xr-x 6 youssef staff 192", "84ms"))
         .child(call_card(false, "edit", "README.md", "replaced 1 occurrence", "12ms"));
-    b
+
+    // Centred like Desktop's 744 px session column.
+    row()
+        .grow(1.0)
+        .h_full()
+        .padding(24.0)
+        .child(el().grow(1.0))
+        .child(inner.max_w(744.0).grow(1.0))
+        .child(el().grow(1.0))
 }
 
 fn servers() -> El {
     col()
-        .w(320.0)
+        .w(280.0)
         .h_full()
-        .padding(12.0)
-        .gap(8.0)
-        .fill(c("#111419"))
-        .border(1.0, c(BORDER))
-        .child(label("SERVERS"))
-        .child(server_row("bash", "2 tools · core_bash running", c(ACCENT)))
-        .child(server_row("fs", "2 tools · last call 4ms", c(OK)))
-        .child(server_row("skill", "1 tool · idle", c(FAINT)))
+        .padding(16.0)
+        .gap(0.0)
+        .border_sides([0.0, 0.0, 0.0, 1.0], c(HAIRLINE))
+        .child(section("SERVERS"))
+        .child(el().h(8.0))
+        .child(server_row("core", "5 tools · 1 running", c(ACCENT), 1.0))
+        .child(server_row("context7", "2 tools · idle", c(OK), 0.0))
 }
 
-fn server_row(name: &str, sub: &str, color: Color) -> El {
-    row()
+fn server_row(name: &str, sub: &str, color: Color, border_top: f32) -> El {
+    let r = col()
         .w_full()
-        .h(44.0)
         .padding(10.0)
-        .gap(8.0)
-        .radius(8.0)
-        .fill(c(PANEL))
-        .border(1.0, c(BORDER))
-        .child(dot(color))
-        .child(col().gap(2.0).grow(1.0).child(text(name).font(t(12.0, 550.0).mono()).color(c(TEXT))).child(text(sub).font(t(11.0, 400.0)).color(c(FAINT))))
+        .gap(2.0)
+        .border_sides([border_top, 0.0, 0.0, 0.0], c(HAIRLINE_MUTED))
+        .child(
+            row()
+                .gap(8.0)
+                .items_center()
+                .child(dot(color))
+                .child(text(name).font(ui_med()).color(c(TEXT_BASE))),
+        )
+        .child(text(sub).font(ui_small()).color(c(TEXT_FAINT)));
+    r
 }
 
 #[derive(Default)]
@@ -155,14 +212,26 @@ fn view(s: &State, _: &mut Cx<State>) -> El {
     row()
         .w_full()
         .h_full()
-        .fill(c(GROUND))
+        .fill(c(BG_BASE))
         .child(sidebar())
-        .child(col().grow(1.0).h_full().child(strip(s)).child(row().grow(1.0).h_full().child(board(s)).child(servers())))
+        .child(
+            col()
+                .grow(1.0)
+                .h_full()
+                .child(strip(s))
+                .child(row().grow(1.0).h_full().child(board(s)).child(servers())),
+        )
 }
 
 fn main() {
     rune::run(AppSpec::<State> {
-        scenes: &[("busy", |s| { s.tunnel = true; s.running = true }), ("idle", |s| s.tunnel = true)],
-        ..AppSpec::new("bionichat overview", (1280.0, 720.0), State::default, view)
+        scenes: &[
+            ("busy", |s| {
+                s.tunnel = true;
+                s.running = true;
+            }),
+            ("idle", |s| s.tunnel = true),
+        ],
+        ..AppSpec::new("bionichat", (1280.0, 720.0), State::default, view)
     });
 }

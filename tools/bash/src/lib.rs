@@ -7,7 +7,6 @@
 //! no cap; that is the point of them.
 
 use std::{
-    collections::HashMap,
     path::PathBuf,
     sync::{Arc, OnceLock},
     time::Duration,
@@ -156,7 +155,7 @@ fn start_background(command: &str, workdir: Option<&str>) -> Result<String, McpE
     // The wrapper writes the exit code once the command ends, so `job` can tell
     // running from finished without a process table.
     let wrapped = format!("{{ {command}\n}} > '{}' 2>&1; echo $? > '{}'", log.display(), dir.join(format!("{id}.exit")).display());
-    let mut child = shell(&wrapped, workdir)
+    let child = shell(&wrapped, workdir)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

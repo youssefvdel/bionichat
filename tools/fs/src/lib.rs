@@ -11,23 +11,17 @@ use std::{
 };
 
 use rmcp::{
-    ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
-    model::{
-        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
-        ToolAnnotations,
-    },
-    service::RequestContext,
-    transport::stdio,
+    ErrorData as McpError,
+    model::{CallToolResult, ContentBlock, Tool, ToolAnnotations},
 };
 use serde_json::{Map, Value, json};
 
 #[derive(Clone)]
-struct FsServer {
+pub struct Fs {
     base: Arc<PathBuf>,
 }
 
-impl FsServer {
+impl Fs {
     /// Absolute paths pass through; anything else joins the base. `..` that
     /// would climb above the anchor is rejected.
     fn resolve(&self, requested: &str) -> Result<PathBuf, String> {
@@ -188,19 +182,13 @@ fn numbered(text: &str, offset: usize) -> String {
         .join("\n")
 }
 
-impl ServerHandler for FsServer {
-    fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("fs", env!("CARGO_PKG_VERSION")))
-            .with_instructions("File tools: read, write, edit.")
+impl Fs {
+    pub fn new(base: std::path::PathBuf) -> Self {
+        Self { base: Arc::new(base) }
     }
 
-    async fn list_tools(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult::with_all_items(vec![
+    pub fn tools() -> Vec<Tool> {
+        vec![
             Tool::new(
                 "read",
                 "Read the contents of a file. Supports text files, images, PDFs and Office documents (.docx, .xlsx, .xls): an image (PNG, JPEG, GIF, WebP, BMP) is returned as an image block the model can look at, up to 8 MB. A PDF, Word document or Excel workbook is returned as its extracted text, so any client can read it. Each text line is prefixed by its 1-based line number as <line>: <content>; the prefix is for reference and is not part of the file content. Use offset and limit to read large files in sections. Prefer one larger read over many small slices, and use bash with grep to find specific content in large files.",
@@ -238,31 +226,27 @@ impl ServerHandler for FsServer {
                     &["path", "oldString", "newString"],
                 ),
             ),
-        ]))
+        ]
     }
 
-    async fn call_tool(
+    pub fn call(
         &self,
-        request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResponse, McpError> {
-        let arguments = request.arguments.unwrap_or_default();
-        let result = match request.name.as_ref() {
-            "read" => self.read(&arguments),
-            "write" => self.write(&arguments),
-            "edit" => self.edit(&arguments),
-            other => {
-                return Err(McpError::invalid_params(
-                    format!("unknown tool `{other}`"),
-                    None,
-                ));
-            }
-        };
-        Ok(result.into())
+        name: &str,
+        arguments: &Map<String, Value>,
+    ) -> Result<CallToolResult, McpError> {
+        match name {
+            "read" => Ok(self.read(arguments)),
+            "write" => Ok(self.write(arguments)),
+            "edit" => Ok(self.edit(arguments)),
+            other => Err(McpError::invalid_params(
+                format!("unknown tool `{other}`"),
+                None,
+            )),
+        }
     }
 }
 
-impl FsServer {
+impl Fs {
     fn param(arguments: &Map<String, Value>, name: &str, tool: &str) -> Result<String, McpError> {
         arguments
             .get(name)
@@ -522,25 +506,6 @@ impl FsServer {
             Err(error) => CallToolResult::error(vec![ContentBlock::text(format!("{error}"))]),
         }
     }
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let base = std::env::args()
-        .nth(1)
-        .or_else(|| std::env::var("BIONICHAT_FS_ROOT").ok())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().expect("working directory"));
-    if !base.is_absolute() {
-        return Err("fs base must be an absolute path".into());
-    }
-    let service = FsServer {
-        base: Arc::new(base),
-    }
-    .serve(stdio())
-    .await?;
-    service.waiting().await?;
-    Ok(())
 }
 
 #[cfg(test)]

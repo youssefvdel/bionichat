@@ -812,7 +812,18 @@ pub fn run() {
             // A built-in whose binary is missing is repointed at this build:
             // moving or renaming the project folder must not break the app.
             let mut added = false;
-            for spec in registry::default_specs(&exe_dir, &file_root, &skills_dir) {
+            let defaults = registry::default_specs(&exe_dir, &file_root, &skills_dir);
+            // Older builds seeded fs, bash and skill as three built-ins. They
+            // are one server now, so their entries (and their tools) go.
+            let before = registry.servers.len();
+            registry.servers.retain(|s| {
+                !s.builtin || defaults.iter().any(|d| d.name == s.name)
+            });
+            if registry.servers.len() != before {
+                added = true;
+                log::info!("folded the old built-in servers into core");
+            }
+            for spec in defaults {
                 match registry.servers.iter_mut().find(|s| s.name == spec.name) {
                     Some(existing) => {
                         // Older registries predate namespaces: built-ins now

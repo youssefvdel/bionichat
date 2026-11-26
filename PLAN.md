@@ -99,7 +99,11 @@ tokens, anatomy, states, copy); `docs/UI-STACK.md` holds the verified versions
 and the rejected alternatives. Do not duplicate the specs here.
 
 Status 2026-11-26: design intent frozen after 12 review rounds; implementation
-plan for Rune written; step 1 passed, plus a 200-line Overview spike with drawn wires (`docs/spike/rune-overview.png`).
+plan for Rune (`docs/specs/ui-rune.md`); toolchain and Overview spike passed.
+The node map is **dropped**: Overview shows live calls (`docs/spike/rune-board.png`).
+`apps/desktop` builds against Rune pinned at `4918969f`; release binary 43 MB
+(debug 604 MB), against 365 MB for the CEF zip. Design tokens carry over; the
+React/Tailwind/shadcn plan and the Tauri bundler notes below are history.
 
 Decided 2026-11-26 after checking live registries and current docs. Versions,
 sources and rejected alternatives: `docs/UI-STACK.md`.
@@ -120,3 +124,20 @@ Tauri's resource dir, not only beside the exe.
 Rule added to the global AGENTS.md the same day: research the live version and
 current docs before choosing any tool, and name the alternative that lost.
 
+
+## P22: one core server, background bash
+
+Spec: `docs/specs/core-tools.md` (implemented 2026-11-26).
+
+- `fs`, `bash` and `skill` stop being three servers and three binaries. They
+  become libraries behind one built-in server, `core`, advertising `read`,
+  `write`, `edit`, `bash`, `skill` from one process.
+- All five tools stay (user decision): dropping `edit` forces whole-file
+  rewrites, dropping `skill` loses the playbooks.
+- `core_bash` can run detached: `background: true` returns a job id, `job: "<id>"`
+  reads the log and exit code, `kill: true` stops it. Jobs are files under
+  `~/.cache/bionichat/jobs/`, so they survive a restart.
+- Registry migration drops the old built-in rows on startup and adds `core`.
+
+Not yet proven: the packaged app on Windows and macOS; that lands with the Rune
+build (P21).

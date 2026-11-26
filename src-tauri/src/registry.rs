@@ -174,43 +174,26 @@ pub fn save(path: &Path, registry: &Registry) -> Result<(), String> {
     fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 
-/// The two seeded servers. `exe_dir` is where cargo puts sibling binaries.
+/// The one seeded server: `core` advertises bash, read, write, edit and skill
+/// from a single process, so the app ships one helper binary.
 pub fn default_specs(exe_dir: &Path, file_root: &Path, skills_dir: &Path) -> Vec<ServerSpec> {
-    vec![
-        ServerSpec {
-            name: "fs".into(),
-            namespace: Some("core".into()),
-            builtin: true,
-            autorestart: false,
-            transport: Transport::Stdio {
-                command: exe_dir.join(if cfg!(windows) { "fs.exe" } else { "fs" }).display().to_string(),
-                args: vec![file_root.display().to_string()],
-                env: BTreeMap::new(),
-            },
+    vec![ServerSpec {
+        name: "core".into(),
+        namespace: Some("core".into()),
+        builtin: true,
+        autorestart: false,
+        transport: Transport::Stdio {
+            command: exe_dir
+                .join(if cfg!(windows) { "core.exe" } else { "core" })
+                .display()
+                .to_string(),
+            args: vec![
+                file_root.display().to_string(),
+                skills_dir.display().to_string(),
+            ],
+            env: BTreeMap::new(),
         },
-        ServerSpec {
-            name: "bash".into(),
-            namespace: Some("core".into()),
-            builtin: true,
-            autorestart: false,
-            transport: Transport::Stdio {
-                command: exe_dir.join(if cfg!(windows) { "bash.exe" } else { "bash" }).display().to_string(),
-                args: vec![],
-                env: BTreeMap::new(),
-            },
-        },
-        ServerSpec {
-            name: "skill".into(),
-            namespace: Some("core".into()),
-            builtin: true,
-            autorestart: false,
-            transport: Transport::Stdio {
-                command: exe_dir.join(if cfg!(windows) { "skill.exe" } else { "skill" }).display().to_string(),
-                args: vec![skills_dir.display().to_string()],
-                env: BTreeMap::new(),
-            },
-        },
-    ]
+    }]
 }
 
 /// Parse Anthropic-style config:
@@ -350,7 +333,7 @@ mod tests {
         Registry {
             servers: vec![
                 ServerSpec {
-                    name: "fs".into(),
+                    name: "core".into(),
                     namespace: Some("core".into()),
                     builtin: true,
                     autorestart: false,
@@ -379,7 +362,7 @@ mod tests {
     #[test]
     fn built_in_servers_cannot_be_removed() {
         let mut registry = registry_with_builtin();
-        let error = remove(&mut registry, "fs").expect_err("built-ins must refuse");
+        let error = remove(&mut registry, "core").expect_err("built-ins must refuse");
         assert!(
             error.contains("built-in"),
             "the refusal must say why: {error}"
@@ -405,6 +388,27 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn one_builtin_server_named_core() {
+        let specs = default_specs(
+            Path::new("/opt/bionichat"),
+            Path::new("/data/fs-root"),
+            Path::new("/data/.agents"),
+        );
+        assert_eq!(specs.len(), 1, "one process, not three");
+        let core = &specs[0];
+        assert_eq!(core.name, "core");
+        assert_eq!(core.namespace(), "core");
+        assert!(core.builtin, "core ships with the app");
+        match &core.transport {
+            Transport::Stdio { command, args, .. } => {
+                assert!(command.ends_with("core") || command.ends_with("core.exe"), "{command}");
+                assert_eq!(args, &["/data/fs-root", "/data/.agents"]);
+            }
+            other => panic!("core must be stdio, got {other:?}"),
+        }
+    }
 
     #[test]
     fn parses_stdio_and_http() {

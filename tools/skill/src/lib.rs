@@ -9,14 +9,8 @@
 use std::sync::Arc;
 
 use rmcp::{
-    ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
-    model::{
-        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
-        ToolAnnotations,
-    },
-    service::RequestContext,
-    transport::stdio,
+    ErrorData as McpError,
+    model::{CallToolResult, ContentBlock, Tool, ToolAnnotations},
 };
 use serde_json::{Map, Value, json};
 
@@ -24,25 +18,11 @@ use serde_json::{Map, Value, json};
 const BUILTIN: &str = include_str!("builtin-bionichat.md");
 
 #[derive(Clone)]
-struct SkillServer {
+pub struct Skill {
     base: Arc<std::path::PathBuf>,
 }
 
-impl SkillServer {
-    fn base_dir() -> std::path::PathBuf {
-        if let Some(arg) = std::env::args().nth(1) {
-            return std::path::PathBuf::from(arg);
-        }
-        if let Ok(dir) = std::env::var("BIONICHAT_SKILLS_DIR") {
-            if !dir.trim().is_empty() {
-                return std::path::PathBuf::from(dir);
-            }
-        }
-        let mut home = dirs_home();
-        home.push(".agents");
-        home
-    }
-
+impl Skill {
     fn skills_dir(&self) -> std::path::PathBuf {
         self.base.join("skills")
     }
@@ -143,13 +123,6 @@ impl SkillServer {
     }
 }
 
-fn dirs_home() -> std::path::PathBuf {
-    if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-        return std::path::PathBuf::from(home);
-    }
-    std::path::PathBuf::from(".")
-}
-
 fn schema(properties: Value, required: &[&str]) -> Arc<Map<String, Value>> {
     let mut obj = json!({
         "type": "object",
@@ -162,19 +135,13 @@ fn schema(properties: Value, required: &[&str]) -> Arc<Map<String, Value>> {
     Arc::new(obj.as_object().expect("object schema").clone())
 }
 
-impl ServerHandler for SkillServer {
-    fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("skill", env!("CARGO_PKG_VERSION")))
-            .with_instructions("Skill manager: list and load the project's playbooks.")
+impl Skill {
+    pub fn new(base: std::path::PathBuf) -> Self {
+        Self { base: Arc::new(base) }
     }
 
-    async fn list_tools(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult::with_all_items(vec![
+    pub fn tools() -> Vec<Tool> {
+        vec![
             Tool::new(
                 "skill",
                 "Load a specialized skill's instructions into the current conversation when the task at hand matches its description, or list the skills available in this project. Call it with action list first when you do not know the name, then action read with the name. Load a skill before doing the work it covers.",
@@ -187,43 +154,26 @@ impl ServerHandler for SkillServer {
                 ),
             )
             .with_annotations(ToolAnnotations::new().read_only(true)),
-        ]))
+        ]
     }
 
-    async fn call_tool(
+    pub fn call(
         &self,
-        request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResponse, McpError> {
-        let arguments = request.arguments.unwrap_or_default();
-        let result = match request.name.as_ref() {
-            "skill" => {
-                let action = arguments.get("action").and_then(Value::as_str).unwrap_or("");
-                match action {
-                    "list" => self.list(),
-                    "read" => self.read(&arguments),
-                    _ => CallToolResult::error(vec![ContentBlock::text(
-                        "skill requires action \"list\" or \"read\"",
-                    )]),
-                }
-            }
-            other => {
-                return Err(McpError::invalid_params(
-                    format!("unknown tool `{other}`"),
-                    None,
-                ));
-            }
-        };
-        Ok(result.into())
+        name: &str,
+        arguments: &Map<String, Value>,
+    ) -> Result<CallToolResult, McpError> {
+        match name {
+            "skill" => match arguments.get("action").and_then(Value::as_str).unwrap_or("") {
+                "list" => Ok(self.list()),
+                "read" => Ok(self.read(arguments)),
+                _ => Ok(CallToolResult::error(vec![ContentBlock::text(
+                    "skill requires action \"list\" or \"read\"",
+                )])),
+            },
+            other => Err(McpError::invalid_params(
+                format!("unknown tool `{other}`"),
+                None,
+            )),
+        }
     }
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let server = SkillServer {
-        base: Arc::new(SkillServer::base_dir()),
-    };
-    let service = server.serve(stdio()).await?;
-    service.waiting().await?;
-    Ok(())
 }

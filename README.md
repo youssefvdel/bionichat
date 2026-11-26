@@ -15,8 +15,11 @@ Vite + Tailwind dashboard: Overview with a live map of every tool call,
 Projects as folder cards, Settings for the link, servers, per-tool policy and
 the built-in tools.
 
-- built-in tools: `core_read` (text, images, PDF, docx, xlsx), `core_write`,
-  `core_edit`, `core_bash`, `core_skill`
+- **one** built-in server, `core`, advertising `core_read` (text, images, PDF,
+  docx, xlsx), `core_write`, `core_edit`, `core_bash`, `core_skill`
+- `core_bash` can run in the background: it returns a job id at once, and
+  `{"job": "<id>"}` reads the log and the exit code later, so a long build
+  never times out a chat
 - any MCP server can be added in Anthropic's `mcpServers` JSON shape; a
   built-in one lives beside the app, an added one starts on its own
 - every call carries a server-time stamp so the model knows when it acted
@@ -166,8 +169,9 @@ dist/                     bun run build output
 Every tool is namespaced by its server, so a name never lies about where it
 came from and two servers can never collide:
 
-- built-ins share the `core` namespace: `core_read`, `core_write`,
-  `core_edit`, `core_bash`, `core_skill`
+- the built-in server is named `core` and advertises `core_read`,
+  `core_write`, `core_edit`, `core_bash`, `core_skill` — one process, one row
+  in Settings, one helper binary beside the app
 - `core_read` answers images (PNG, JPEG, GIF, WebP, BMP, up to 8 MB) as an MCP
   image block next to a text line, so a vision-capable chat can look at a
   screenshot or a photo instead of being told it is binary

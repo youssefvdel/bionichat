@@ -8,7 +8,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync,
 import { basename, join, resolve } from "node:path";
 
 const exe = process.platform === "win32" ? ".exe" : "";
-const files = ["bionichat", "fs", "bash", "skill", "bionichat-tunnel"].map((name) => name + exe);
+const files = ["bionichat", "core", "bionichat-tunnel"].map((name) => name + exe);
 const version = JSON.parse(readFileSync("package.json", "utf8")).version ?? "0.1.0";
 const platform = `${process.platform}-${process.arch}`;
 

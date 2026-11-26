@@ -3,6 +3,7 @@ resolver = "3"
 exclude = ["apps/desktop"]
 members = [
     "src-tauri",
+    "tools/core",
     "tools/fs",
     "tools/bash",
     "tools/skill",
