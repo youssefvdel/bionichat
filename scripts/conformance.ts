@@ -234,21 +234,15 @@ async function main() {
   }
 
   // 9b. PDF: extracted text, not bytes
-  const pdfs = isWindows
-    ? ["C:\\Users\\Administrator\\Downloads\\26CSCI08I_SPM_CW_Term_Vlad.pdf"]
-    : ["/home/youssefvdel/Documents/exams-unlocked/computer arch final exam.pdf"];
-  for (const pdf of pdfs) {
-    const doc = await call("core_read", { path: pdf });
-    const text = textOf(doc.body);
-    if (/is not a file|No such file|cannot find/i.test(text)) continue;
-    record(
-      "core_read extracts PDF text",
-      text.includes("is a PDF") && text.length > 500,
-      text.split("\n")[0].slice(0, 80),
-      doc.ms,
-    );
-    break;
-  }
+  const pdf = resolve("tests/fixtures/note.pdf");
+  const pdfDoc = await call("core_read", { path: pdf });
+  const pdfText = textOf(pdfDoc.body);
+  record(
+    "core_read extracts PDF text",
+    pdfText.includes("is a PDF") && pdfText.length > 100,
+    pdfText.split("\n")[0].slice(0, 80),
+    pdfDoc.ms,
+  );
 
   // 9c. Office files: text out of a docx and an xlsx, no client support needed
   // Repo fixtures first: the check runs on any machine with no setup. On

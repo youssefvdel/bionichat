@@ -49,8 +49,9 @@ One dependency instead of two, and it is what the current shadcn components
 import.
 
 Risk: it is young (0.5.2). Fallback is `clsx` 2.1.1 + `tailwind-merge` 3.7.1,
-which are mature and API-compatible. The wrapper `src/lib/cn.ts` isolates the
-choice so the swap is one file.
+which are mature and API-compatible. The shadcn installer writes
+`src/lib/utils.ts` exporting `cn`; that file is the only place that decides the
+implementation, so the fallback is a one-file swap.
 
 ### Icons: `lucide-react` 1.81.0
 
@@ -126,9 +127,10 @@ there is a web build worth testing end to end.
    (`tsconfig.json` `paths` **and** `vite.config.ts` `resolve.alias`), a
    `components.json`, and CSS that imports `tailwindcss`, `tw-animate-css` and
    `shadcn/tailwind.css`.
-3. `shadcn init` scaffolds a project; for this repo the **manual path**
-   (`manual.mdx`) is used instead so the init cannot overwrite the existing
-   `src/index.css` or the Tauri entry.
+3. `shadcn init` on an existing Vite project validates the alias and rewrites
+   `src/index.css`; the spike ran it and it worked. It **is** the path used, with
+   a commit before and after so the rewrite is visible, and the tokens are then
+   ported deliberately instead of keeping its palette.
 4. Base UI styles through `data-*` state attributes and the `render` prop, so any
    Tailwind build works and no extra styling runtime is needed.
 5. Vitest 5 needs an explicit `vite` peer (Bun installs peers automatically, so

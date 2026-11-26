@@ -29,7 +29,9 @@ every state legible and no functional regression.
 
 ### Non-goals
 
-- No chat UI, no new backend features, no tool behaviour changes.
+- No chat UI and no new features. One backend field is in scope: activity entries
+  gain `origin` (`local` / `link`), because the rail cannot show what it never
+  receives. No other tool behaviour changes.
 - No installer, macOS or Windows rebuild work.
 - No user-facing theming; one theme, done well.
 - No marketing page.
@@ -81,7 +83,7 @@ things that float (dialog, popover, toast) and appears nowhere else.
 | accent | `#4c9dff` (the only saturated colour that is not a status) |
 | ok | `#3ecf8e` |
 | warn | `#d8a04a` |
-| danger | `#e0555f` |
+| danger | `#ff6b76` (text and rings; `#e0555f` only as a 14% fill) |
 
 Radii: 12px panels, 8px controls, 6px chips. No `rounded-2xl`, no pills-as-rows.
 
@@ -114,6 +116,100 @@ animation on every list item. `MotionConfig reducedMotion="user"` plus a CSS
 custom button variants (no default shadow, no gradient), a bespoke status strip,
 the map above, a rail that reads like a terminal, and mono for all data. A
 stranger should not be able to name the component library from the first screen.
+The preset is a starting point, not the design: every component in
+`src/components/ui/` gets its padding, radius, colour and focus ring replaced by
+the values above, and the default shadcn shadows are removed.
+
+Rejected: swapping Geist for a display face to look less like shadcn. The
+sameness was weight, scale and spacing, not the family; a second font costs
+bundle and looks worse in mono-heavy screens. Rejected also: hand-copying
+primitives without the CLI. The spike showed the CLI writes clean Base UI
+components in 4 seconds; the work that matters is the styling above, not the
+copying.
+
+### Component anatomy — exact, so two engineers draw the same screen
+
+**Button.** Heights 28 (sm) / 32 (md). Padding 10px horizontal (sm), 14px (md).
+Radius 8. Border 1px transparent unless secondary. No shadow anywhere.
+Text: 12px/16 weight 550 (sm), 13px/18 weight 550 (md); letter-spacing 0.
+- primary: fill `accent`, text `#0b0d10`, weight 550. Hover: accent lightened 6%.
+  Active: 1px down, no scale.
+- secondary: transparent fill, 1px `border strong`, text `text`. Hover: `panel raised`.
+- ghost: no border, text `muted`. Hover: `panel raised`, text `text`.
+- danger: text `danger`, 1px `danger` at 40% alpha. Hover: danger at 12% alpha fill.
+- disabled: 45% opacity, no hover, cursor not-allowed.
+
+**IconButton.** 28×28, radius 8, icon 14px stroke 1.5, tooltip on hover and focus.
+
+**Status strip** (top of Overview, 40px tall, no card): three segments separated
+by a 1px `border` rule, left to right: Link (`StatusDot` + mono host or `off`),
+Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`). Revoke sits
+at the right end as a ghost danger button, visible only while the link is up.
+
+**StatusDot.** 6px circle plus a 12px label, gap 6, one size everywhere (strip,
+rail header, map node). Never a filled pill. ok `#3ecf8e`, warn `#d8a04a`,
+danger `#e0555f`, idle `#6b7280`. Never a filled pill.
+
+**Activity rail.** Fixed 320px column, scrolls internally, max-height = viewport
+minus the strip. Each entry: 3px left bar in the status colour; header row 28px
+in mono 11px — status, tool, `local` or `link` origin chip, duration, time; body
+is the call card (command after `$`, or path with line count); output block mono
+12px on `panel raised`, 8px padding, 1px border, `pre` with `max-height: 240px`
+and internal scroll, "Show all" only above 20 lines.
+Denied (`-32001`), timed-out (`-32002`) and unknown-tool calls appear with their
+real status and the hub's message, never hidden.
+Empty state: "No calls yet. Connect a chat from the link above." Running entries
+first, then finished, newest first. The rail header says `live` and the tooltip
+says it clears on app restart; nothing here survives a restart except the
+counters in the strip.
+
+**Map.** Canvas `ground`, no dot grid. Node 168×36, radius 8 (nodes are
+controls, not panels), 1px `border`, text `text`,
+fill `panel`, 12px Geist Mono label, 8px left padding with a 6px StatusDot.
+Hub node 200×40, same language, label "hub" plus the port in mono. Edges 1px
+`#2e333c`, bezier; live edge 1.5px `accent`, `stroke-dasharray: 6 4` while
+running, solid at completion, then settles to `#2e333c`. Those two map beats
+(600ms settle, 1.2s fade) are the only exceptions to the 120/180ms grammar.
+No minimap, no controls, no background pattern, no node shadows.
+
+**Type ramp (final).** 11 / 12 / 13 / 15 / 19 only. Weights 400 / 550 / 600.
+Roles: 11 uppercase tracking 0.06em = section labels and table headers; 12 =
+meta, mono values, buttons (sm); 13 = body, buttons (md); 15 = section and card
+titles; 19 = page title only. Mono for URLs, durations, tool names, counts,
+code, port numbers, paths. Sans for everything else.
+
+**Focus.** Every interactive element uses `:focus-visible` only: 2px `accent`
+ring, `outline-offset: 2px`, radius follows the control. No glow, no shadow.
+
+**Replacement map for the current CSS.** `clay-panel` → `Panel` (flat, 1px
+`border`, radius 12, no shadow); `clay-bump` → deleted; `Pill` → `StatusDot` +
+label or a 6px-radius `Chip`; radii 22/16/999 → 12/8/6; Inter → Geist; the
+`360px` rail → 320px; `gap-4`/`gap-3` → 24px between groups, 8px inside one.
+
+### First run — the only path a new user sees
+
+On a fresh profile (no projects, link off, no calls yet) Overview shows a
+three-step **Connect a chat** block above the map, replacing the empty rail:
+
+1. `Start the link` — the existing action, one button.
+2. `Copy the URL` — shows the full `https://…/mcp` in mono with a copy button.
+3. `Paste it into ChatGPT, Claude or OpenCode` — one line naming where per
+   client, no marketing copy.
+
+It disappears once the link is up and one call has arrived; Settings keeps a
+`Show the intro again` control. The strip, not the intro, is what teaches the
+state afterwards.
+
+### Trust surface — what the user can always see
+
+- The Link card states the blast radius in one sentence: **"Anyone with this URL
+  can read, write and run commands on this computer until you revoke it."**
+- Revoke is a two-step inline confirm (same pattern as Remove): first click asks
+  `Revoke? This breaks the link permanently.`, second click burns the route.
+- Each rail entry shows `local` or `link`, so a shell command is never anonymous.
+- After a restart: the rail is empty and says so; the strip shows the link state
+  the app actually holds, including `ready (started outside the app)` when a
+  systemd-launched tunnel answers but this app did not start it.
 
 ## P1 — Grounded facts
 
@@ -161,11 +257,15 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    the Tauri event listeners once at the root.
    Check: `scrollWidth <= clientWidth` at 1280×720; Tab order matches visual
    order; active view has `aria-current="page"`.
+5b. **First run.** The Connect-a-chat block from P0, shown from a fixture.
+    Check: fresh profile renders it; after a call it is gone; Settings can bring
+    it back.
 6. **Overview, with states.** Status strip (link state, tool count, last call),
    map, live rail. Empty (no servers), loading (first list), error (hub down),
    offline (tunnel down but local hub up), quarantined server.
    Check: each state rendered from a fixture; a real `core_bash` lights hub →
-   server → tool and shows running → ok with duration; rail keeps 50 newest.
+   server → tool and shows running → ok with duration; rail keeps 50 newest and
+   marks the call `local` or `link`.
 7. **Projects and Settings.** Folder picker behaviour unchanged. Settings
    grouped Link / Servers / Approvals / Files. The Link card states the blast
    radius in one sentence and puts **Revoke** beside the URL. Pending approvals
@@ -177,10 +277,12 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    (-32001); Ask opens the dialog and Approve lets the call through; Remove asks
    twice (label changes), then removes; Copy yields the full `…/mcp` URL; a bad
    JSON paste shows `line X column Y`; Revoke still burns the route.
-8. **Scale rules.** 50 servers, 200-character paths, 10k-character tool output,
-   one very long single line.
+8. **Scale and restart truth.** 50 servers, 200-character paths, 10k-character
+   output, one very long single line; then restart the app while the tunnel runs
+   outside it.
    Check: no horizontal overflow; long values truncate with a title or expand
-   control; the rail caps height and scrolls inside itself.
+   control; the rail caps height and scrolls inside itself; after restart the
+   rail says it cleared and the strip reads `ready (started outside the app)`.
 9. **Motion.** Route/view transitions, rail enter, map pulse.
    Check: with reduced motion emulated, computed animation duration ≤ 0.01s and
    no transform transition runs; without it, no layout shift (CLS measured 0
@@ -217,7 +319,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 2. The binary from this tree, on `:0`, shows the new UI and performs a real call.
 3. `bun run check`, `bun run build`, lint, tests and conformance green.
 4. A stranger can say what the app does from the first screen alone.
-5. Two screenshots (idle, mid-call) reviewed against the anti-generic list.
+5. Three screenshots (first run, idle, mid-call) reviewed against the
+   anti-generic list, plus one of the approval dialog with a visible focus ring.
 6. `dist` size change stated as a number.
 
 ## Not tested by this spec
