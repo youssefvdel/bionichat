@@ -287,7 +287,7 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    Check: `bun install` clean, `bun run check` 0, `bun run build` green, and a
    grep shows the alias in both config files; the window refuses to shrink below
    1280×720.
-2. **shadcn init.** `bunx shadcn@latest init -y -b base -p nova`; commit before
+2. **shadcn init.** `bunx shadcn@4.23.1 init -y -b base -p nova`; commit before
    and after because it rewrites `src/index.css`; then replace its palette with
    the tokens above, keeping the variable names its components expect.
    Check: `components.json` has `"style": "base-nova"`; `shadcn add button`
@@ -313,9 +313,11 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    the Tauri event listeners once at the root.
    Check: `scrollWidth <= clientWidth` at 1280×720; Tab order matches visual
    order; active view has `aria-current="page"`.
-5a. **Origin field (the one backend change).** `post_mcp` already takes the raw
-    body only; add `HeaderMap` to the handler and pass `host` down into the RPC
-    handler, or the comparison cannot exist. Then in `src-tauri/src/hub.rs`, add
+5a. **Origin field (the one backend change).** `post_mcp` extracts the raw
+    `Bytes` only, and `handle_rpc` / `route_call` never see a header, so the
+    refactor is explicit: add `HeaderMap` to `post_mcp`, read `host`, and thread
+    it through **all three** signatures (`post_mcp` → `handle_rpc` →
+    `route_call`). Then in `src-tauri/src/hub.rs`, add
     `origin: "local" | "link"` to the activity payload and the `tool-start`
     event. Derive it from the **`Host` header compared with the tunnel's
     hostname** — not the peer address, because the tunnel helper forwards to
@@ -324,6 +326,9 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     matches the tunnel host is `link`; everything else is `local` (including
     all traffic while the tunnel is down). Mirror the field in `src/types.ts`.
     One hub test covers both host values; no other behaviour changes.
+    The vendored tunnel copies request bytes verbatim
+    (`vendor/opentunnel/src/tunnel.rs:842`), so the public `Host` really does
+    reach the hub unchanged.
     **Limit, stated in the UI copy:** a caller who already holds the link can
     forge `Host`, so origin is best-effort attribution for the human reading the
     rail, not proof. The rail tooltip says exactly that; no security claim rests
