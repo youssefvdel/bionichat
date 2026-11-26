@@ -147,6 +147,8 @@ there is a web build worth testing end to end.
 - A page using Button, Dialog, Select, Tooltip and sonner: `tsc --noEmit` exit
   0, `vite build` green. Spike bundle 437 kB js / 39 kB css, fonts emitted.
 - **TypeScript 7 removed `baseUrl`** (TS5102): the alias must be `paths` only.
+- `@fontsource-variable/geist` declares `font-weight: 100 900` (read from its
+  installed CSS), so the 550 weight in the spec is a real axis value.
 
 ## What must still be proven during implementation
 
