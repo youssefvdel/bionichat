@@ -1,7 +1,8 @@
 # Spec — bionichat UI rebuild
 
-Status: **round 11** — panels of three fresh-context lenses; design and zoom-out
-clean, readiness pending the last fixes
+Status: **frozen, round 12** (2026-11-26). Two consecutive rounds with no open
+Blocker or Major across design, readiness and zoom-out. Sanctioned backend
+changes while building: the two named in P0/step 5a and 5c, nothing else.
 Date: 2026-11-26
 Owner: this session
 
