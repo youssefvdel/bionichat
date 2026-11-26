@@ -1,0 +1,19 @@
+[package]
+name = "bionichat-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[dependencies]
+axum = "0.8"
+base64 = "0.22"
+reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
+which = "8"
+log = "0.4"
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+rmcp = { workspace = true }
+chrono = { workspace = true }

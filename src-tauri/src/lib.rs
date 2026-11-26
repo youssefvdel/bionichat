@@ -1,11 +1,17 @@
 //! bionichat shell: dashboard over an MCP registry, the local hub that
 //! aggregates every registered server, approval policy, and supervision.
 
-mod hub;
-mod mcp;
-mod policy;
-mod registry;
-mod tunnel;
+use bionichat_core::{hub, mcp, policy, registry, tunnel};
+
+/// Sends hub events to the Tauri window.
+struct TauriSink(tauri::AppHandle);
+
+impl hub::EventSink for TauriSink {
+    fn emit(&self, event: &str, payload: serde_json::Value) {
+        use tauri::Emitter as _;
+        let _ = self.0.emit(event, payload);
+    }
+}
 
 use std::{
     collections::HashMap,
@@ -877,7 +883,11 @@ pub fn run() {
                 .ok()
                 .and_then(|value| value.parse().ok())
                 .unwrap_or(DEFAULT_PORT);
-            let hub = Hub::new(registry_path.clone(), port, Some(app.handle().clone()));
+            let hub = Hub::new(
+                registry_path.clone(),
+                port,
+                Some(std::sync::Arc::new(TauriSink(app.handle().clone()))),
+            );
 
             let tunnel = TunnelManager::new(data_dir.join("tunnel.log"));
             let hydrated = tunnel.hydrate();

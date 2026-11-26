@@ -46,7 +46,7 @@ fn dot(color: Color) -> El {
     el().size(6.0, 6.0).radius(3.0).fill(color)
 }
 
-fn sidebar() -> El {
+fn sidebar(s: &State) -> El {
     col()
         .w(240.0)
         .h_full()
@@ -62,23 +62,28 @@ fn sidebar() -> El {
                 .child(text("bionichat").font(ui_med()).color(c(TEXT_BASE))),
         )
         .child(el().h(12.0))
-        .child(nav("Overview", true))
-        .child(nav("Projects", false))
+        .child(nav("Overview", View::Overview, s))
+        .child(nav("Projects", View::Projects, s))
         .child(el().grow(1.0))
-        .child(nav("Settings", false))
+        .child(nav("Settings", View::Settings, s))
 }
 
-fn nav(name: &str, active: bool) -> El {
+fn nav(name: &str, view: View, s: &State) -> El {
+    let active = s.view == view;
     row()
         .h(32.0)
         .padding(8.0)
         .radius(R_ROW)
         .fill(if active { c(OVERLAY_HOVER) } else { Color::TRANSPARENT })
+        .role("button")
+        .label(name)
+        .focusable(true)
         .child(
             text(name)
                 .font(if active { ui_med() } else { ui() })
                 .color(if active { c(TEXT_BASE) } else { c(TEXT_MUTED) }),
         )
+        .on_press(move |s: &mut State| s.view = view)
 }
 
 fn strip(s: &State) -> El {
@@ -202,8 +207,70 @@ fn server_row(name: &str, sub: &str, color: Color, border_top: f32) -> El {
     r
 }
 
+fn page(title: &str, rows: Vec<El>) -> El {
+    let mut inner = col().w_full().gap(10.0).child(section(title));
+    for row in rows {
+        inner = inner.child(row);
+    }
+    row()
+        .grow(1.0)
+        .h_full()
+        .padding(24.0)
+        .child(el().grow(1.0))
+        .child(inner.max_w(744.0).grow(1.0))
+        .child(el().grow(1.0))
+}
+
+fn list_row(title: &str, sub: &str) -> El {
+    col()
+        .w_full()
+        .padding(12.0)
+        .gap(2.0)
+        .fill(c(LAYER_01))
+        .radius(R_ROW)
+        .child(text(title).font(ui_med()).color(c(TEXT_BASE)))
+        .child(text(sub).font(ui_small()).color(c(TEXT_FAINT)))
+}
+
+fn projects() -> El {
+    page(
+        "PROJECTS",
+        vec![
+            list_row("Bionichat", "/home/youssefvdel/Projects/Bionichat"),
+            list_row("point-here", "/home/youssefvdel/Projects/point-here"),
+            list_row("Add a folder…", "opens the folder browser"),
+        ],
+    )
+}
+
+fn settings(s: &State) -> El {
+    page(
+        "LINK",
+        vec![
+            list_row(
+                if s.tunnel { "kfgepc72im6k.opentunnel.xyz/mcp" } else { "off" },
+                "anyone with this URL can run commands on this machine",
+            ),
+            list_row("Start with the app", "off"),
+            list_row("Open with no window", "off"),
+            section("FILES"),
+            list_row("app data", "~/.local/share/com.bionichat.app"),
+            list_row("jobs", "~/.cache/bionichat/jobs"),
+        ],
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+enum View {
+    #[default]
+    Overview,
+    Projects,
+    Settings,
+}
+
 #[derive(Default)]
 struct State {
+    view: View,
     tunnel: bool,
     running: bool,
 }
@@ -213,13 +280,17 @@ fn view(s: &State, _: &mut Cx<State>) -> El {
         .w_full()
         .h_full()
         .fill(c(BG_BASE))
-        .child(sidebar())
+        .child(sidebar(s))
         .child(
             col()
                 .grow(1.0)
                 .h_full()
                 .child(strip(s))
-                .child(row().grow(1.0).h_full().child(board(s)).child(servers())),
+                .child(match s.view {
+                    View::Overview => row().grow(1.0).h_full().child(board(s)).child(servers()),
+                    View::Projects => projects(),
+                    View::Settings => settings(s),
+                }),
         )
 }
 
@@ -231,6 +302,11 @@ fn main() {
                 s.running = true;
             }),
             ("idle", |s| s.tunnel = true),
+            ("projects", |s| s.view = View::Projects),
+            ("settings", |s| {
+                s.tunnel = true;
+                s.view = View::Settings;
+            }),
         ],
         ..AppSpec::new("bionichat", (1280.0, 720.0), State::default, view)
     });

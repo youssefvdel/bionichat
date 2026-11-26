@@ -333,6 +333,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "bionichat-core",
  "chrono",
  "log",
  "reqwest",
@@ -344,6 +345,22 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-runtime-cef",
  "tauri-runtime-wry",
+ "tokio",
+ "which",
+]
+
+[[package]]
+name = "bionichat-core"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "log",
+ "reqwest",
+ "rmcp",
+ "serde",
+ "serde_json",
  "tokio",
  "which",
 ]

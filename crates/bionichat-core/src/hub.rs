@@ -25,7 +25,6 @@ use axum::{
 };
 use serde::Serialize;
 use serde_json::{Map, Value, json};
-use tauri::{AppHandle, Emitter};
 
 use crate::{
     mcp::{self, Client, ToolInfo},
@@ -108,6 +107,13 @@ fn extension_for(mime: &str) -> &'static str {
     }
 }
 
+/// Where the hub sends its events. The shell decides what a sink is: a Tauri
+/// window, a Rune app, or a test collector. Payloads are JSON so neither side
+/// depends on the other's types.
+pub trait EventSink: Send + Sync {
+    fn emit(&self, event: &str, payload: serde_json::Value);
+}
+
 pub struct Hub {
     port: u16,
     registry_path: PathBuf,
@@ -138,14 +144,14 @@ pub struct Hub {
     /// whole pictures, and nothing older than a few calls is ever fetched.
     images: Mutex<std::collections::VecDeque<PublishedImage>>,
     next_id: AtomicU64,
-    app: Option<AppHandle>,
+    sink: Option<std::sync::Arc<dyn EventSink>>,
     ask_timeout: Duration,
 }
 
 type Rpc = (StatusCode, Option<Value>);
 
 impl Hub {
-    pub fn new(registry_path: PathBuf, port: u16, app: Option<AppHandle>) -> Arc<Self> {
+    pub fn new(registry_path: PathBuf, port: u16, sink: Option<std::sync::Arc<dyn EventSink>>) -> Arc<Self> {
         Arc::new(Self {
             port,
             registry_path,
@@ -160,7 +166,7 @@ impl Hub {
             public_url: Mutex::new(None),
             images: Mutex::new(std::collections::VecDeque::new()),
             next_id: AtomicU64::new(1),
-            app,
+            sink,
             ask_timeout: ASK_TIMEOUT,
         })
     }
@@ -181,7 +187,7 @@ impl Hub {
             public_url: Mutex::new(None),
             images: Mutex::new(std::collections::VecDeque::new()),
             next_id: AtomicU64::new(1),
-            app: None,
+            sink: None,
             ask_timeout: timeout,
         })
     }
@@ -469,8 +475,8 @@ impl Hub {
                 },
             );
 
-        if let Some(app) = &self.app {
-            let _ = app.emit(
+        if let Some(sink) = &self.sink {
+            sink.emit(
                 "approval-requested",
                 json!({
                     "id": id,
@@ -566,10 +572,10 @@ impl Hub {
         })?;
 
         let started = std::time::Instant::now();
-        if let Some(app) = &self.app {
-            let _ = app.emit(
+        if let Some(sink) = &self.sink {
+            sink.emit(
                 "tool-start",
-                CallStart {
+                serde_json::to_value(CallStart {
                     server: server.clone(),
                     tool: tool.clone(),
                     arguments: arguments.clone(),
@@ -577,7 +583,8 @@ impl Hub {
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_millis() as u64)
                         .unwrap_or_default(),
-                },
+                })
+                .unwrap_or(serde_json::Value::Null),
             );
         }
         let registry = self.registry();
@@ -686,8 +693,8 @@ impl Hub {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .truncate(50);
-        if let Some(app) = &self.app {
-            let _ = app.emit("tool-activity", entry);
+        if let Some(sink) = &self.sink {
+            sink.emit("tool-activity", serde_json::to_value(&entry).unwrap_or(serde_json::Value::Null));
         }
     }
 
