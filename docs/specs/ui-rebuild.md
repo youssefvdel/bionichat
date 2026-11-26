@@ -248,8 +248,10 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    Check: grep for hex outside `index.css` returns nothing; computed body font
    is Geist; body contrast ≥ 4.5:1 measured from computed styles.
 4. **Primitives.** Button (primary/secondary/ghost/danger), IconButton, Input,
-   Select, Dialog, Tooltip, Toast, StatusDot, Label, KeyValue, EmptyState,
-   ErrorState, Skeleton. Each wraps Base UI + `cn`; no bespoke ARIA.
+   Select, Dialog, Tooltip, StatusDot, Label, KeyValue, EmptyState, ErrorState,
+   Skeleton. Each wraps Base UI + `cn`; no bespoke ARIA. **sonner is the only
+   toast** — no shadcn Toast primitive is added, so there is never a second
+   toast system.
    Check: all of them render on a `?gallery=1` route in the dev server, with a
    visible focus ring reached by Tab and no console errors. Automated axe and
    unit tests come with step 10, so lint green cannot stand in for looks.
@@ -259,6 +261,13 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    the Tauri event listeners once at the root.
    Check: `scrollWidth <= clientWidth` at 1280×720; Tab order matches visual
    order; active view has `aria-current="page"`.
+5a. **Origin field (the one backend change).** In `src-tauri/src/hub.rs`, add
+    `origin: "local" | "link"` to the activity payload and to the `tool-start`
+    event, derived from the socket peer address (loopback = `local`, anything
+    else = `link`). Mirror it in `src/types.ts`. One hub test asserts both
+    values; no other behaviour changes.
+    Check: `cargo test --lib` green; a call from `127.0.0.1:8787` records
+    `local`, a call through the tunnel records `link`.
 5b. **First run.** The Connect-a-chat block from P0, shown from a fixture.
     Check: fresh profile renders it; after a call it is gone; Settings can bring
     it back.
@@ -286,9 +295,12 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    control; the rail caps height and scrolls inside itself; after restart the
    rail says it cleared and the strip reads `ready (started outside the app)`.
 9. **Motion.** Route/view transitions, rail enter, map pulse.
-   Check: with reduced motion emulated, computed animation duration ≤ 0.01s and
-   no transform transition runs; without it, no layout shift (CLS measured 0
-   on a call).
+   Check: emulate `prefers-reduced-motion: reduce` through CDP
+   (`Emulation.setEmulatedMedia`) on the dev server in the in-app browser, then
+   repeat against the CEF dev run with `--remote-debugging-port` (dev builds
+   accept Chromium switches; release builds do not). Under reduce: computed
+   animation-duration ≤ 0.01s and no transform transition. Without it: CLS 0
+   during a call.
 9b. **Fonts and cleanup.** Self-hosted Geist loaded by CSS; the old Inter /
     system stack removed; `clay-*` classes deleted; `grep -r "clay-" src`
     empty; no static HTML besides `index.html`.
@@ -299,9 +311,18 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     visual pass is deliberate: lint green must not be able to stand in for
     "looks right".
     Check: `bun run lint` 0 errors; `bun run test` green.
-11. **CEF proof.** `bun run build` → touch `build.rs` → `cargo build -p bionichat`
-    → run on `:0`.
-    Check: all views render; a real tool call works; conformance 19/19.
+11. **CEF proof matrix.** `bun run build` → `touch src-tauri/build.rs` →
+    `cargo build -p bionichat` → `scripts/run-cef.sh` on `:0`. Every row below
+    is run in CEF, because the in-app browser is a different Chromium:
+    - Dialog opens, focus lands on Approve, Tab stays inside, Escape denies and
+      focus returns to the invoking button.
+    - `cn` merges conflicting classes correctly on one conditional button.
+    - Reduced motion via CDP emulation disables the rail and map animation.
+    - Tailwind output matches the dev screenshot (hand-check two crops).
+    - `bun scripts/conformance.ts http://127.0.0.1:8787/mcp` prints **19/19**;
+      the fixtures in `tests/fixtures/` are committed, so a missing one is a
+      failure, not a skip.
+    Check: all five rows pass, each with the command and its output quoted.
 12. **Package regression.** `bun run package`, extract clean, run.
     Check: starts, 5 tools listed, one `core_bash` returns, closes.
 
@@ -319,7 +340,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 
 1. Every check above passes, with the command and output quoted.
 2. The binary from this tree, on `:0`, shows the new UI and performs a real call.
-3. `bun run check`, `bun run build`, lint, tests and conformance green.
+3. `bun run check`, `bun run build`, lint, tests, the five CEF matrix rows and
+   conformance 19/19 green.
 4. A stranger can say what the app does from the first screen alone.
 5. Three screenshots (first run, idle, mid-call) reviewed against the
    anti-generic list, plus one of the approval dialog with a visible focus ring.
