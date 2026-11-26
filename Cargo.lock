@@ -1718,7 +1718,7 @@ dependencies = [
  "base64 0.22.1",
  "calamine",
  "pdf-extract",
- "quick-xml 0.38.4",
+ "quick-xml 0.42.0",
  "rmcp",
  "serde_json",
  "tokio",
