@@ -144,7 +144,9 @@ Text: 12px/16 weight 550 (sm), 13px/18 weight 550 (md); letter-spacing 0.
 
 **Status strip** (top of Overview, 40px tall, no card): three segments separated
 by a 1px `border` rule, left to right: Link (`StatusDot` + mono host or `off`),
-Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`). Every
+Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`). The grid is
+`minmax(0,2fr) minmax(96px,1fr) minmax(120px,1fr)` plus the Revoke action, so a
+long hostname shrinks the link segment first, never the other two; every
 segment is `min-width: 0` with `text-overflow: ellipsis` on the mono value and
 the full value in a `title`; the strip never wraps and never pushes Revoke off
 screen at the enforced 1280px minimum. Revoke sits at the right end as a ghost danger button, visible
@@ -159,7 +161,8 @@ minus the strip. Each entry: 3px left bar in the status colour; header row 28px
 in mono 11px — status, tool, `local` or `link` origin chip, duration, time; body
 is the call card (command after `$`, or path with line count); output block mono
 12px on `panel raised`, 8px padding, 1px border, `pre` with `max-height: 240px`
-and internal scroll, "Show all" only above 20 lines.
+and `overflow: auto` in both axes (a 10k-character single line scrolls inside
+the card, never wraps the layout), "Show all" only above 20 lines.
 Denied (`-32001`), timed-out (`-32002`) and unknown-tool calls appear with their
 real status and the hub's message, never hidden.
 Empty state: "No calls yet. Connect a chat from the link above." Running entries
@@ -175,6 +178,12 @@ Hub node 200×40, same language, label "hub" plus the port in mono. Edges 1px
 running, solid at completion, then settles to `#2e333c`. Those two map beats
 (600ms settle, 1.2s fade) are the only exceptions to the 120/180ms grammar.
 No minimap, no controls, no background pattern, no node shadows.
+
+**Map scale.** Up to 20 tools the map shows every node. Above 20, each server
+node gets a collapse toggle and only the servers start expanded; above 60 nodes
+the view opens as the list instead, with a banner offering the map. Zoom and pan
+are always available; the initial `fitView` runs on layout change, not on a
+render.
 
 **Map accessibility.** Nodes are focusable in reading order (hub, then servers,
 then their tools) with a roving tabindex: arrow keys **move focus** between
@@ -226,7 +235,9 @@ state afterwards.
 - The Link card states the blast radius in one sentence: **"Anyone with this URL
   can read, write and run commands on this computer until you revoke it."**
 - Revoke is a two-step inline confirm (same pattern as Remove): first click asks
-  `Revoke? This breaks the link permanently.`, second click burns the route.
+  `Revoke? This breaks the link permanently.`, second click burns the route. The
+  armed state resets after 5s or when focus leaves the button, and only one
+  two-step control can be armed at a time.
 - Each rail entry shows `local` or `link`, so a shell command is never anonymous.
 - After a restart: the rail is empty and says so, the last-call segment reads
   `—`, and the tool count comes from the live list, not from storage. Nothing
@@ -311,6 +322,9 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     Check: `cargo test -p bionichat --lib origin` green; a call to
     `127.0.0.1:8787` with `Host: 127.0.0.1:8787` records `local`, the same call
     with the tunnel host records `link`.
+5b. **First run.** The Connect-a-chat block from P0, shown from a fixture.
+    Check: fresh profile renders it; after a call it is gone; Settings can bring
+    it back.
 5c. **External helper detection (the second backend change).** After a restart
     the app currently reports `off` even when a helper it did not start still
     holds the public URL. Read the stable hostname from
@@ -321,9 +335,6 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     the "lock free" and "hostname missing" paths.
     Check: start the helper by hand, restart the app, the strip says
     `ready (external)`; kill the helper, the strip falls back to `off`.
-5b. **First run.** The Connect-a-chat block from P0, shown from a fixture.
-    Check: fresh profile renders it; after a call it is gone; Settings can bring
-    it back.
 6. **Overview, with states.** Status strip (link state, tool count, last call),
    map, live rail. Empty (no servers), loading (first list), error (hub down),
    offline (tunnel down but local hub up), quarantined server.
@@ -344,8 +355,9 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    Check: policy change persists to `registry.json`; Deny blocks a call
    (-32001); Ask opens the dialog and Approve lets the call through; Remove asks
    twice (label changes), then removes; Copy yields the full `…/mcp` URL; a bad
-   JSON paste shows `line X column Y` and the empty state carries a copyable
-   example (`{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}`); Revoke still burns the route.
+   JSON paste shows **both** the raw `JSON.parse` message, which carries
+   `line X column Y`, and the zod issue path (`mcpServers.context7.command`),
+   and the empty state carries a copyable example (`{"mcpServers":{"context7":{"command":"npx","args":["-y","@upstash/context7-mcp"]}}}`); Revoke still burns the route.
 8. **Scale and restart truth.** 50 servers, 200-character paths, 10k-character
    output, one very long single line; then restart the app while the tunnel runs
    outside it.
