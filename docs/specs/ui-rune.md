@@ -5,6 +5,14 @@ Status: **draft, round 0** (2026-11-26)
 Step 1 result: Rune `examples/hello` built in 2m57s on this box, rendered
 headless (`--snap` → 5,956-byte PNG, GPU init 2.1s, one frame, 12 instances).
 Debug binary 191 MB; release size to be measured.
+
+Step 1b result (map spike, 2026-11-26): a 200-line example draws the real
+Overview — sidebar, status strip, hub→server→tool nodes, **wires via
+`Shape::stroke_with`** (grey idle, accent live), and rail cards — at 1280×720
+in 3.09 s incremental build. Snapshot: `docs/spike/rune-overview.png`.
+83 layout nodes, 285 glyphs, first frame 203 ms (debug, one frame). The wires
+are straight L-routes in the spike; the plan still calls for beziers and lane
+routing.
 Supersedes `docs/specs/ui-rebuild.md` **as an implementation plan**. That file
 stays as the design source of truth: problem statement, tokens, anatomy,
 states, trust copy and the CEF-era checks all still apply. What changes is how
