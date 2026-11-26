@@ -6,3 +6,6 @@ dist/
 
 # Rune app builds in its own workspace
 apps/desktop/target/
+
+# Rune app builds in its own workspace
+apps/desktop/target/
