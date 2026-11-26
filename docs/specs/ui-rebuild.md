@@ -1,8 +1,9 @@
 # Spec — bionichat UI rebuild
 
-Status: **frozen, round 12** (2026-11-26). Two consecutive rounds with no open
-Blocker or Major across design, readiness and zoom-out. Sanctioned backend
-changes while building: the two named in P0/step 5a and 5c, nothing else.
+Status: **SUPERSEDED as an implementation plan** by `docs/specs/ui-rune.md`
+(2026-11-26, shell moved from Tauri+CEF+React to Rune). This file remains the
+design source of truth — tokens, anatomy, states, copy and acceptance checks
+all still apply; only the build technology changed.
 Date: 2026-11-26
 Owner: this session
 

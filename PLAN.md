@@ -93,13 +93,13 @@ Goal: Tauri v3 alpha + Rust app whose first screen is OUR dashboard: tunnel stat
 
 ## P21: UI rebuild (2026) and real installers
 
-**The plan of record is `docs/specs/ui-rebuild.md`** (12 steps, each with a
-command or DOM check). `docs/UI-STACK.md` holds the verified versions and the
-rejected alternatives. This section only records what belongs to the wider
-plan; do not duplicate the spec here.
+**The plan of record is `docs/specs/ui-rune.md`** (Rune, not Tauri/React, decided
+2026-11-26). `docs/specs/ui-rebuild.md` stays as the design source (problem,
+tokens, anatomy, states, copy); `docs/UI-STACK.md` holds the verified versions
+and the rejected alternatives. Do not duplicate the specs here.
 
-Status 2026-11-26: spec at round 11, three fresh-context lenses per round; design
-and zoom-out clean, readiness verifying the last fixes.
+Status 2026-11-26: design intent frozen after 12 review rounds; implementation
+plan for Rune written, step 1 (toolchain spike) running.
 
 Decided 2026-11-26 after checking live registries and current docs. Versions,
 sources and rejected alternatives: `docs/UI-STACK.md`.
