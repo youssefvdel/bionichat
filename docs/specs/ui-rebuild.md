@@ -387,6 +387,12 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     from the new Overview in the built app.
     Check: no README sentence names a screen that does not exist; the screenshot
     is the new UI, same size budget as before (~90 KB).
+11c. **Nothing existing is lost.** Before step 1, copy `registry.json`,
+    `settings.json` and `projects.json` aside and record their sha256. After the
+    rebuild, compare: no file is rewritten, no policy flips, no project drops.
+    The UI may read them differently; it may not change them.
+    Check: `sha256sum` before and after are equal for all three files.
+
 12. **Package regression.** `bun run package`, extract clean, run.
     Check: starts, 5 tools listed, one `core_bash` returns, closes.
 
