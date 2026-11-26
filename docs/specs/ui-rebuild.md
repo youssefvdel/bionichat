@@ -29,9 +29,10 @@ every state legible and no functional regression.
 
 ### Non-goals
 
-- No chat UI and no new features. One backend field is in scope: activity entries
-  gain `origin` (`local` / `link`), because the rail cannot show what it never
-  receives. No other tool behaviour changes.
+- No chat UI and no new features. Two backend changes are in scope, both so the
+  UI stops lying: activity entries gain `origin` (`local` / `link`), and the app
+  can detect a helper it did not start (`ready (external)`). No other tool
+  behaviour changes.
 - No installer, macOS or Windows rebuild work.
 - No user-facing theming; one theme, done well.
 - No marketing page.
@@ -146,7 +147,7 @@ by a 1px `border` rule, left to right: Link (`StatusDot` + mono host or `off`),
 Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`). Every
 segment is `min-width: 0` with `text-overflow: ellipsis` on the mono value and
 the full value in a `title`; the strip never wraps and never pushes Revoke off
-screen at 960px. Revoke sits at the right end as a ghost danger button, visible
+screen at the enforced 1280px minimum. Revoke sits at the right end as a ghost danger button, visible
 only while the link is up.
 
 **StatusDot.** 6px circle plus a 12px label, gap 6, one size everywhere (strip,
@@ -229,7 +230,8 @@ state afterwards.
   `—`, and the tool count comes from the live list, not from storage. Nothing
   claims a number it cannot prove. The strip shows the link state the app
   actually holds, including `ready (started outside the app)` when a
-  systemd-launched tunnel answers but this app did not start it.
+  systemd-launched tunnel answers but this app did not start it — the state is
+  written `ready (external)` everywhere, one string, no variant.
 - If the app closes while an approval is pending, the client receives `-32002`
   (unanswered) within its timeout and the rail records it; nothing is left
   hanging silently.
@@ -378,7 +380,7 @@ All versions verified 2026-11-26; full table and rejected alternatives in
       the fixtures in `tests/fixtures/` are committed, so a missing one is a
       failure, not a skip.
     Check: all five rows pass, each with the command and its output quoted; at
-   the 960×620 minimum the strip stays on one line with ellipsis, never wraps.
+   the 1280×720 minimum the strip stays on one line with ellipsis, never wraps.
 12. **Package regression.** `bun run package`, extract clean, run.
     Check: starts, 5 tools listed, one `core_bash` returns, closes.
 
