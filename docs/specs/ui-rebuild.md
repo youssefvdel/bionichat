@@ -313,7 +313,7 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 | shadcn init overwrites `index.css` badly | high (it does rewrite it) | commit first; port tokens deliberately, keep its variable names |
 | Base UI + TS 7 friction | retired | spike passed |
 | Scope creep into features | high | non-goals; anything else becomes a note |
-| Bundle growth | low | measure `dist` at steps 4 and 12 |
+| Bundle growth | low | baseline measured 2026-11-26: 502,503 B js + 43,406 B css; compare at steps 4 and 12 |
 
 ## Definition of done
 
