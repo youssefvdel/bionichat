@@ -292,6 +292,16 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     Check: `cargo test -p bionichat --lib origin` green; a call to
     `127.0.0.1:8787` with `Host: 127.0.0.1:8787` records `local`, the same call
     with the tunnel host records `link`.
+5c. **External helper detection (the second backend change).** After a restart
+    the app currently reports `off` even when a helper it did not start still
+    holds the public URL. Read the stable hostname from
+    `$XDG_DATA_HOME/opentunnel/<profile>/tunnel.json`, probe the helper's lock
+    at `127.0.0.1:8789` (the helper binds `port + 2`), and only when both exist
+    and `GET https://<host>/mcp` answers, report `ready (external)` with that
+    URL. Otherwise report `off`. No new process is started; one unit test covers
+    the "lock free" and "hostname missing" paths.
+    Check: start the helper by hand, restart the app, the strip says
+    `ready (external)`; kill the helper, the strip falls back to `off`.
 5b. **First run.** The Connect-a-chat block from P0, shown from a fixture.
     Check: fresh profile renders it; after a call it is gone; Settings can bring
     it back.
@@ -321,7 +331,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    outside it.
    Check: no horizontal overflow; long values truncate with a title or expand
    control; the rail caps height and scrolls inside itself; after restart the
-   rail says it cleared and the strip reads `ready (started outside the app)`.
+   rail says it cleared and the strip reads `ready (external)` when step 5c
+   detects a helper this app did not start.
 9. **Motion.** Route/view transitions, rail enter, map pulse.
    Check: emulate `prefers-reduced-motion: reduce` through CDP
    (`Emulation.setEmulatedMedia`) on the dev server in the in-app browser, then
