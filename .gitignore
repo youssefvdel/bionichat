@@ -3,3 +3,6 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Rune app builds in its own workspace
+apps/desktop/target/
