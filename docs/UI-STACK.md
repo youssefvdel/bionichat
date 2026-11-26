@@ -6,7 +6,7 @@ Every version below was read from the live registry on **2026-11-26** (npm
 1.9 docs, Tailwind v4 docs, the Vitest 5 migration guide.
 
 The question this answers: which tools give a bespoke, accessible, fast desktop
-UI that survives CEF (Chromium 156) and does not fight the existing Vite build.
+UI that survives CEF (Chromium 154) and does not fight the existing Vite build.
 
 ## What already exists and stays
 

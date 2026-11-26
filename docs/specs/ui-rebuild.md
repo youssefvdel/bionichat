@@ -250,7 +250,9 @@ All versions verified 2026-11-26; full table and rejected alternatives in
 4. **Primitives.** Button (primary/secondary/ghost/danger), IconButton, Input,
    Select, Dialog, Tooltip, Toast, StatusDot, Label, KeyValue, EmptyState,
    ErrorState, Skeleton. Each wraps Base UI + `cn`; no bespoke ARIA.
-   Check: each renders in a test; axe-core 0 violations on a gallery page.
+   Check: all of them render on a `?gallery=1` route in the dev server, with a
+   visible focus ring reached by Tab and no console errors. Automated axe and
+   unit tests come with step 10, so lint green cannot stand in for looks.
 5. **Shell and store.** Titlebar keeps the hand-rolled drag (CEF has no Tauri
    drag API); sidebar with Overview, Projects, Settings pinned bottom, logo
    last. A `zustand` store holds servers, tunnel, approvals and activity, fed by
