@@ -238,7 +238,9 @@ state afterwards.
 
 - The Link card states the blast radius in one sentence: **"Anyone with this URL
   can read, write and run commands on this computer until you revoke it."**
-- Revoke is a two-step inline confirm (same pattern as Remove): first click asks
+- Revoke exists only for a link this app started (`ready`); in `ready
+  (external)` it is disabled, because the app cannot end a process it does not
+  own. It is a two-step inline confirm (same pattern as Remove): first click asks
   `Revoke? This breaks the link permanently.`, second click burns the route. The
   armed state resets after 5s or when focus leaves the button, and only one
   two-step control can be armed at a time.
@@ -353,13 +355,15 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     design and proves nothing — report `ready (external)` with that URL.
     Otherwise report `off`. No new process is started; one unit test covers the
     "lock free" and "hostname missing" paths.
-    While that state is current, **Start** and **Stop** are disabled with one
-    line of why ("The link is running outside this app"); **Revoke** stays
-    enabled and says what it does: it burns the route, so the public URL dies
-    even though the external helper keeps running.
+    While that state is current, **Start**, **Stop** and **Revoke** are all
+    disabled, with one line of why: "The link is running outside this app. Stop
+    it where it was started, or quit the app that started it." Revoke is not
+    offered because `TunnelManager::revoke` can only kill a child this app
+    owns, and the external helper holds its lock before the revoke branch — a
+    button that cannot do what it says is worse than no button.
     Check: start the helper by hand, restart the app, the strip says
-    `ready (external)`; both Start and Stop are disabled; kill the helper, the
-    strip falls back to `off`.
+    `ready (external)`; Start, Stop and Revoke are disabled; kill the helper,
+    the strip falls back to `off` and the buttons come back.
 6. **Overview, with states.** Status strip (link state, tool count, last call),
    map, live rail. Empty (no servers), loading (first list), error (hub down),
    offline (tunnel down but local hub up), quarantined server.
