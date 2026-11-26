@@ -308,15 +308,15 @@ Verified 2026-11-20 on this box (tunnel `kfgepc72im6k.opentunnel.xyz`):
 
 ## Known gaps (next passes)
 
-- P3: per-tool Allow/Ask/Deny, restart supervision, external-kill detection,
-  re-reading the registry when the file changes outside the app.
+- Re-reading the registry when the file changes outside the app.
 - Hub is JSON-RPC over POST only; SSE streaming and `Mcp-Session-Id` are not
   implemented, so clients that require SSE will not connect.
-- Tool calls through the hub are unbounded: no per-call timeout, and the
-  approvals policy is not enforced yet.
+- Tool calls through the hub are unbounded: no per-call timeout.
 - HTTP/SSE transports parse and persist but probe returns
   "not wired yet (P2)".
-- Approvals are shown as the default policy only; nothing enforces them yet.
+- Approvals are enforced (`hub::tests::denied_tool_returns_32001_without_starting_the_server`,
+  `ask_without_an_answer_times_out_with_32002`); the default is Allow, so a
+  prompt appears only where a per-tool Ask was set.
 
 ## License
 

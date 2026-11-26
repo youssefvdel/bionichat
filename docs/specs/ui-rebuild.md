@@ -172,6 +172,12 @@ running, solid at completion, then settles to `#2e333c`. Those two map beats
 (600ms settle, 1.2s fade) are the only exceptions to the 120/180ms grammar.
 No minimap, no controls, no background pattern, no node shadows.
 
+**Map accessibility.** Nodes are focusable in reading order (hub, then servers,
+then their tools); `Enter` opens a details popover for that node, arrow keys pan,
+`Home` returns to the hub. A `Map as list` toggle renders the same data as a
+plain table (project, tool, status, last call) for screen readers and anyone who
+prefers text; it is the same React state, not a screenshot.
+
 **Type ramp (final).** 11 / 12 / 13 / 15 / 19 only. Weights 400 / 550 / 600.
 Roles: 11 uppercase tracking 0.06em = section labels and table headers; 12 =
 meta, mono values, buttons (sm); 13 = body, buttons (md); 15 = section and card
@@ -191,7 +197,12 @@ label or a 6px-radius `Chip`; radii 22/16/999 → 12/8/6; Inter → Geist; the
 On a fresh profile (no projects, link off, no calls yet) Overview shows a
 three-step **Connect a chat** block above the map, replacing the empty rail:
 
-1. `Start the link` — the existing action, one button.
+The blast-radius sentence comes **first**: "Anyone with this URL can read,
+write and run commands on this computer." It is one line at the top of the
+block, in `danger` text, before any button.
+
+1. `Start the link` — the existing action, one button. On failure it shows the
+   hub's error inline (not a toast) and the button becomes `Try again`.
 2. `Copy the URL` — shows the full `https://…/mcp` in mono with a copy button.
 3. `Paste it into ChatGPT, Claude or OpenCode` — one line naming where per
    client, no marketing copy.
@@ -210,6 +221,9 @@ state afterwards.
 - After a restart: the rail is empty and says so; the strip shows the link state
   the app actually holds, including `ready (started outside the app)` when a
   systemd-launched tunnel answers but this app did not start it.
+- If the app closes while an approval is pending, the client receives `-32002`
+  (unanswered) within its timeout and the rail records it; nothing is left
+  hanging silently.
 
 ## P1 — Grounded facts
 
@@ -276,7 +290,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    offline (tunnel down but local hub up), quarantined server.
    Check: each state rendered from a fixture; a real `core_bash` lights hub →
    server → tool and shows running → ok with duration; rail keeps 50 newest and
-   marks the call `local` or `link`.
+   marks the call `local` or `link`; Tab reaches every node once, Enter opens the
+   details, and the list toggle exposes the same rows.
 7. **Projects and Settings.** Folder picker behaviour unchanged. Settings
    grouped Link / Servers / Approvals / Files. The Link card states the blast
    radius in one sentence and puts **Revoke** beside the URL. Pending approvals
