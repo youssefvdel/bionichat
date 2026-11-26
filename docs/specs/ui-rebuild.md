@@ -143,8 +143,11 @@ Text: 12px/16 weight 550 (sm), 13px/18 weight 550 (md); letter-spacing 0.
 
 **Status strip** (top of Overview, 40px tall, no card): three segments separated
 by a 1px `border` rule, left to right: Link (`StatusDot` + mono host or `off`),
-Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`). Revoke sits
-at the right end as a ghost danger button, visible only while the link is up.
+Tools (mono count + "tools"), Last call (mono `tool · 84ms` or `—`). Every
+segment is `min-width: 0` with `text-overflow: ellipsis` on the mono value and
+the full value in a `title`; the strip never wraps and never pushes Revoke off
+screen at 960px. Revoke sits at the right end as a ghost danger button, visible
+only while the link is up.
 
 **StatusDot.** 6px circle plus a 12px label, gap 6, one size everywhere (strip,
 rail header, map node). Never a filled pill. ok `#3ecf8e`, warn `#d8a04a`,
@@ -173,8 +176,9 @@ running, solid at completion, then settles to `#2e333c`. Those two map beats
 No minimap, no controls, no background pattern, no node shadows.
 
 **Map accessibility.** Nodes are focusable in reading order (hub, then servers,
-then their tools); `Enter` opens a details popover for that node, arrow keys pan,
-`Home` returns to the hub. A `Map as list` toggle renders the same data as a
+then their tools) with a roving tabindex: arrow keys **move focus** between
+nodes, `Shift`+arrows pan the canvas, `Enter` opens a details popover and
+`Escape` closes it and returns focus to the node, `Home` focuses the hub. A `Map as list` toggle renders the same data as a
 plain table (project, tool, status, last call) for screen readers and anyone who
 prefers text; it is the same React state, so it updates live, not a screenshot.
 A polite live region announces two things only: the link changing state, and an
@@ -289,6 +293,10 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     matches the tunnel host is `link`; everything else is `local` (including
     all traffic while the tunnel is down). Mirror the field in `src/types.ts`.
     One hub test covers both host values; no other behaviour changes.
+    **Limit, stated in the UI copy:** a caller who already holds the link can
+    forge `Host`, so origin is best-effort attribution for the human reading the
+    rail, not proof. The rail tooltip says exactly that; no security claim rests
+    on it.
     Check: `cargo test -p bionichat --lib origin` green; a call to
     `127.0.0.1:8787` with `Host: 127.0.0.1:8787` records `local`, the same call
     with the tunnel host records `link`.
@@ -361,7 +369,8 @@ All versions verified 2026-11-26; full table and rejected alternatives in
     - `bun scripts/conformance.ts http://127.0.0.1:8787/mcp` prints **19/19**;
       the fixtures in `tests/fixtures/` are committed, so a missing one is a
       failure, not a skip.
-    Check: all five rows pass, each with the command and its output quoted.
+    Check: all five rows pass, each with the command and its output quoted; at
+   the 960×620 minimum the strip stays on one line with ellipsis, never wraps.
 12. **Package regression.** `bun run package`, extract clean, run.
     Check: starts, 5 tools listed, one `core_bash` returns, closes.
 
