@@ -79,7 +79,7 @@ things that float (dialog, popover, toast) and appears nowhere else.
 | border strong | `#2e333c` |
 | text | `#e7e9ee` |
 | muted | `#9aa1ad` |
-| faint | `#6b7280` |
+| faint | `#8f97a5` (4.6:1 on ground; never lighter for text) |
 | accent | `#4c9dff` (the only saturated colour that is not a status) |
 | ok | `#3ecf8e` |
 | warn | `#d8a04a` |
@@ -148,7 +148,7 @@ at the right end as a ghost danger button, visible only while the link is up.
 
 **StatusDot.** 6px circle plus a 12px label, gap 6, one size everywhere (strip,
 rail header, map node). Never a filled pill. ok `#3ecf8e`, warn `#d8a04a`,
-danger `#ff6b76` (the same value as danger text), idle `#6b7280`. Never a filled pill.
+danger `#ff6b76` (the same value as danger text), idle `#8f97a5`. Never a filled pill.
 
 **Activity rail.** Fixed 320px column, scrolls internally, max-height = viewport
 minus the strip. Each entry: 3px left bar in the status colour; header row 28px
@@ -176,7 +176,10 @@ No minimap, no controls, no background pattern, no node shadows.
 then their tools); `Enter` opens a details popover for that node, arrow keys pan,
 `Home` returns to the hub. A `Map as list` toggle renders the same data as a
 plain table (project, tool, status, last call) for screen readers and anyone who
-prefers text; it is the same React state, not a screenshot.
+prefers text; it is the same React state, so it updates live, not a screenshot.
+A polite live region announces two things only: the link changing state, and an
+incoming call (`core_bash via link`), so a screen-reader user learns about a call
+without the region reading every result aloud.
 
 **Type ramp (final).** 11 / 12 / 13 / 15 / 19 only. Weights 400 / 550 / 600.
 Roles: 11 uppercase tracking 0.06em = section labels and table headers; 12 =
@@ -218,8 +221,10 @@ state afterwards.
 - Revoke is a two-step inline confirm (same pattern as Remove): first click asks
   `Revoke? This breaks the link permanently.`, second click burns the route.
 - Each rail entry shows `local` or `link`, so a shell command is never anonymous.
-- After a restart: the rail is empty and says so; the strip shows the link state
-  the app actually holds, including `ready (started outside the app)` when a
+- After a restart: the rail is empty and says so, the last-call segment reads
+  `—`, and the tool count comes from the live list, not from storage. Nothing
+  claims a number it cannot prove. The strip shows the link state the app
+  actually holds, including `ready (started outside the app)` when a
   systemd-launched tunnel answers but this app did not start it.
 - If the app closes while an approval is pending, the client receives `-32002`
   (unanswered) within its timeout and the rail records it; nothing is left
@@ -298,7 +303,10 @@ All versions verified 2026-11-26; full table and rejected alternatives in
    marks the call `local` or `link`; Tab reaches every node once, Enter opens the
    details, and the list toggle exposes the same rows.
 7. **Projects and Settings.** Folder picker behaviour unchanged. Settings
-   grouped Link / Servers / Approvals / Files. The Link card states the blast
+   grouped Link / Servers / Approvals / Files. The Link group keeps the existing
+   controls by name: **Start link when the app opens**, **Open with no window
+   next time**, and the last failure reason from `tunnel.log` when the link is
+   down — headless users must not lose setup they already rely on. The Link card states the blast
    radius in one sentence and puts **Revoke** beside the URL. Pending approvals
    render in a Dialog (Base UI) with Approve / Deny / Until-restart, plus a
    sonner toast on resolve; the store keeps the 5s poll as a fallback. Add-MCP
