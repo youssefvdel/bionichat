@@ -1,7 +1,7 @@
 # bionichat
 
 [![desktop](https://github.com/youssefvdel/bionichat/actions/workflows/desktop.yml/badge.svg)](https://github.com/youssefvdel/bionichat/actions/workflows/desktop.yml)
-[![license](https://img.shields.io/badge/license-MIT-4c9dff)](LICENSE)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-4c9dff)](LICENSE)
 [![version](https://img.shields.io/badge/version-0.1.0-4c9dff)](CHANGELOG.md)
 [![platforms](https://img.shields.io/badge/platforms-linux%20%C2%B7%20windows%20%C2%B7%20macos%20untested-8b92a0)](#platforms)
 
@@ -312,3 +312,14 @@ Verified 2026-11-20 on this box (tunnel `kfgepc72im6k.opentunnel.xyz`):
 - HTTP/SSE transports parse and persist but probe returns
   "not wired yet (P2)".
 - Approvals are shown as the default policy only; nothing enforces them yet.
+
+## License
+
+AGPL-3.0-or-later. You may read it, run it, change it and share it; if you run a
+modified version as a network service, you must publish your changes under the
+same licence. A fork must not call itself bionichat or use its logo: the name
+belongs to this project. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+A licence protects the code and the name, not the idea: anyone can build a
+different app that does the same thing. Only keeping the source closed prevents
+that.

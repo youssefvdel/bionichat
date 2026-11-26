@@ -1,0 +1,31 @@
+bionichat
+Copyright (C) 2026 Youssef
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See LICENSE.
+
+Because this program runs a network service (the MCP hub and its public link),
+section 13 applies: if you modify it and let other people reach it over a
+network, you must offer them the corresponding source of your modified version.
+
+The name and the logo are not part of the licence
+-------------------------------------------------
+
+"bionichat" and its logo identify this project and its author. The licence
+above covers the code, not the name. A fork, a modified build or a derivative
+product must use a different name and a different logo, and must not present
+itself as bionichat or as an official release. Nothing here limits fair use of
+the name to refer to this project.
+
+Third-party components
+----------------------
+
+- vendor/opentunnel — OpenTunnel, github.com/anomalyco/opentunnel, MIT licence,
+  vendored from a pinned commit. Its LICENSE file is kept in place.
+- Chromium Embedded Framework and Chromium — distributed under their own
+  licences (BSD-style). Release archives ship the unmodified runtime beside the
+  application; their notices are in CREDITS.html inside the archive.
+- Rust crates and npm packages — under the licences recorded in Cargo.lock and
+  bun.lock; each crate and package keeps its own license files in the build.
