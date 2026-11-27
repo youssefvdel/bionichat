@@ -1,133 +1,119 @@
-# Handoff — bionichat, 26 Nov 2026
+# Handoff — 2026-11-27
 
-Read this first, then `docs/specs/ui-rebuild.md` (the plan of record),
-`PLAN.md` (section **P21**) and `README.md`.
-Written for a fresh chat with no memory of the work that produced it.
+Written for a fresh agent picking this repo up cold. State below was verified on
+this box on 2026-11-27 (HEAD `1ed5135`, clean tree, remote in sync).
 
 ## What this is
 
-bionichat runs a small MCP hub on the user's own machine and gives a web chat
-(ChatGPT, Claude, Gemini, OpenCode, anything speaking MCP) his real tools over
-one public HTTPS endpoint: `core_read`, `core_write`, `core_edit`, `core_bash`,
-`core_skill`.
+bionichat is a local MCP hub for one person's own machine: it merges every MCP
+server into one endpoint, shows what the agent is doing live, and can publish the
+endpoint through a public tunnel so a remote client (Windows PC, phone agent) can
+drive the same machine. Public repo: `github.com/youssefvdel/bionichat`,
+AGPL-3.0-or-later, release `v0.1.0` exists.
 
-- Repo: https://github.com/youssefvdel/bionichat (public, AGPL-3.0-or-later)
-- Release: `v0.1.0`, Linux + Windows zips proven by hand, macOS built in CI but
-  **never launched by hand**
-- Stack: Rust (Tauri v3 alpha.6 + `tauri-runtime-cef` alpha.7, bundled Chromium),
-  React 19.3.1, Vite 8.3.8, Tailwind 4.3.5, TypeScript 7.0.2, `@xyflow/react`
-  13.0.3
-- ~80 commits, CI `desktop.yml` (Windows + macOS jobs)
+Two shells exist on purpose:
 
-## State that is proven
+- `src-tauri/` — the shipped Tauri + CEF app (legacy, works, 43 MB release zip).
+- `apps/desktop/` — the Rune app (new face of the product). It renders fake data
+  today; the hub is not wired in yet.
 
-- Conformance suite: `bun scripts/conformance.ts <url>` — 19 checks, 19/19 over
-  the public link and against `http://127.0.0.1:8787/mcp`.
-- Image results publish a public URL (`/files/<token>/read.png`) and travel as a
-  native MCP image block first, text second.
-- Word/Excel/PDF read as text in `core_read` (no Python): `.docx` via zip +
-  quick-xml, `.xlsx`/`.xls` via calamine, PDF via pdf-extract with a 60k clamp.
-- Linux zip runs from a clean extract after the sandbox fix: the app detects a
-  non-setuid `chrome-sandbox` and starts Chromium with `--no-sandbox`, printing
-  one stderr warning (see `SECURITY.md`).
+## Layout
 
-## Decisions worth not re-litigating
-
-| decision | why |
+| path | what |
 |---|---|
-| Tauri v3 alpha + CEF | user required one renderer on every OS; v3 ships the CEF runtime and the setuid helper in deb/rpm |
-| OpenTunnel vendored as `tools/tunnel` | upstream CLI is Unix-only; the library is portable; stable per-machine URL |
-| Tool names `core_*` and `<server>_<tool>` | no bare names, no `__`; prefix routes without a list first |
-| Every result stamped `[server time …]` | models reason about "now"; stamp inside the same block as the payload |
-| No approval gate by default | web chats time out; Deny per tool and Revoke the link are the brakes |
-| AGPL-3.0 + reserved name | user wants the code protected from resale; `NOTICE` reserves the name |
+| `crates/bionichat-core/` | hub, mcp, policy, registry, tunnel — no Tauri, no windowing |
+| `crates/bionichat-core/src/hub.rs` | MCP JSON-RPC, tool union, approvals, activity feed, image publishing |
+| `crates/bionichat-core/src/lib.rs` | `EventSink` trait (`emit(&str, Value)`) + `hide_window` |
+| `src-tauri/src/lib.rs` | Tauri commands; `TauriSink` forwards hub events to the window |
+| `apps/desktop/src/main.rs` | the whole Rune UI (single file, ~700 lines) |
+| `tools/core/` | one built-in MCP server: `read write edit bash skill` |
+| `tools/bash/` | library behind `bash`: detached jobs, log, kill |
+| `docs/specs/ui-rune.md` | frozen UI spec (3 lenses, 2 clean rounds) |
+| `docs/UI-STACK.md` | why Rune beat Tauri |
+| `docs/spike/` | snapshots: `rune-titlebar.png`, `rune-projects.png`, `rune-settings.png` |
 
-## Next work, in order
+## Verified state
 
-### 1. UI rebuild (the active task, planned)
+- `cargo test -p bionichat-core` → **38 passed, 0 failed, 0.28 s** (fast: the
+  test build has no Tauri).
+- `cargo build -p bionichat-core` clean.
+- `apps/desktop` `cargo build` clean; live window ran on `:0`.
+- `.git` is 2.3 MB; history rewritten twice (a 140 MB `dist/` blob, then a
+  600 MB `apps/desktop/target/`). `apps/desktop/target` is now ignored and
+  untracked — never commit build output.
+- Remote `main` == local `main`. Release `v0.1.0` assets are from the Tauri app.
 
-Goal: an interface that looks designed, not generated. Decisions already
-researched and recorded in `PLAN.md` P21 and `docs/UI-STACK.md`:
+## The Rune app
 
-- shadcn/ui CLI 4.23.1, **Base UI** primitives (`@base-ui/react` 1.9.0; Radix is
-  no longer the default), preset `nova` (Geist + Lucide)
-- Tailwind 4.3.5 CSS-first tokens, `motion` 14.14.0, `lucide-react` 1.81.0
-- Geist Sans/Mono self-hosted via `@fontsource-variable/*`
-- Keep `@xyflow/react` for the live map
+Pinned fork: Rune `4918969f04dce020f63b34e024368a86e5e1857d` with 8
+`[patch.crates-io]` entries in the workspace `Cargo.toml`. Own workspace under
+`apps/desktop`. Source checkout for API reading: `/tmp/opencode/rune-src`
+(may be gone; re-clone at the pin).
 
-Rules for this pass: dark, dense, one accent, real focus rings, 8px grid,
-motion only where it explains state, reduced-motion honoured, DOM measurements
-as proof (not screenshots). Write the spec first, run a fresh-eyes review
-(`egm-review` skill or a subagent given only the spec), then build.
+What exists (all fake data):
 
-### 2. Installers
+1. Custom **title bar**: breadcrumb left, `− □ ✕` right, `.window_drag()` band.
+2. **Sidebar**: the real logo (4 SVG paths from `assets/logo/bionichat-master.svg`,
+   drawn with `Path::from_svg` + `Area` + `Shape`), `Overview`, `Projects`,
+   `Settings`, Settings pinned to the bottom.
+3. **Overview**: link strip, RUNNING card(s), RECENT activity with mono command
+   blocks, SERVERS rail.
+4. **Projects** and **Settings**: list rows on the same tokens.
 
-`tauri build --bundles …` in v3 already ships CEF: `libcef` beside the exe on
-Windows, under `/usr/share/<product>` in deb/rpm, framework + five helpers in
-the macOS `.app`; deb/rpm install `chrome-sandbox` 4755.
+Run it:
 
-- Targets: NSIS (Windows), deb + rpm + AppImage (Linux), dmg/.app (macOS)
-- Blocker to solve: tool servers (`fs`, `bash`, `skill`) and `bionichat-tunnel`
-  are resolved **beside the executable**. Installed layouts put them in the
-  resource dir, so resolution must learn `resource_dir()` too.
-- Test installed, not only unzipped. Signing costs are a user decision
-  (Windows cert, Apple $99/yr).
-
-### 3. Smaller items
-
-- Rebuild the Windows zip from current source (it predates the sandbox fix and
-  earlier UI commits; behaviour is unchanged there).
-- macOS: launch the CI artifact by hand once.
-
-## Environment facts that will bite
-
-- **One build per tree.** Running Vite while cargo reads `dist/` produces a
-  phantom "couldn't read dist/<hash>" error. Serialise.
-- The frontend is embedded at compile time: `touch src-tauri/build.rs` before
-  `cargo build` after any `src/` change, or you ship the previous UI.
-- CEF build needs `cmake` + `ninja`. First build downloads ~1 GB into `target/`.
-- Desktop: only `DISPLAY=:0` (Selkies). No Xvfb.
-  `XAUTHORITY=$(ls -d /run/user/1000/selkies-session-*/Xauthority | head -1)`.
-- Launch: `./scripts/run-cef.sh`. App data: `~/.local/share/com.bionichat.app/`
-  (`registry.json`, `settings.json`, `projects.json`, `tunnel.log`).
-- One instance per machine: app lock on 8788, tunnel helper lock on 8789. A
-  second launch exits on purpose.
-- The hub listens on `127.0.0.1:8787`, `POST /mcp`. The tunnel helper is the
-  only way in from outside.
-- Windows box `youssef-pc` is reachable over SSH; the app must run in the
-  logged-on desktop session (a Scheduled Task), never in SSH session 0.
-- Built-in tool servers follow the binary beside the running app; user-added
-  servers keep their own command.
-
-## Verification recipes
-
-```bash
-bun run check                      # tsc --noEmit
-cargo test --lib                   # hub, registry, policy, docx
-cargo clippy --workspace --all-targets -- -D warnings
-bun run build && touch src-tauri/build.rs && cargo build -p bionichat
-bun scripts/conformance.ts http://127.0.0.1:8787/mcp
-bun run package                    # zip into dist/, then extract and run it
+```sh
+cd apps/desktop
+cargo run                      # live window (needs DISPLAY=:0)
+cargo run -q -- --snap /tmp/opencode/x.png --scene busy --size 1280x720
+cargo run -q -- --tree /tmp/opencode/tree.json --scene idle   # element tree
 ```
 
-## How to start in the new chat
+Scenes: `busy` (running + recent), `idle` (no running), `projects`, `settings`.
 
-1. Say: "read docs/HANDOFF.md and docs/specs/ui-rebuild.md".
-2. Write the UI spec to a file before touching `src/`.
-3. Run the fresh-eyes review, then implement in small verified passes.## State, 2026-11-26 (Rune pivot + one core server)
+### Rune traps already paid for
 
-- Shell decided: **Rune** (`appspec`/`El` UI, native GPU), not Tauri+CEF+React.
-  Plan: `docs/specs/ui-rune.md`. Design tokens/anatomy stay in
-  `docs/specs/ui-rebuild.md`. Map is dropped; Overview is a live call board.
-- `apps/desktop` is a standalone Rune workspace pinned at
-  `4918969f04dce020f63b34e024368a86e5e1857d` (all 8 `[patch.crates-io]` entries at
-  the same rev). Release binary: 43 MB. Headless proof:
-  `cargo run -- --snap out.png --scene busy --size 1280x720`.
-- Backend: one built-in server `core` (bash, read, write, edit, skill) replaces
-  the three servers `fs`, `bash`, `skill`. `bash` supports background jobs:
-  `{"background": true}` → `{job}`; `{"job": "<id>"}` reads it; `"kill": true`
-  stops it. Jobs are files in `~/.cache/bionichat/jobs/`.
-- Still pending: extract hub/policy/tunnel from `src-tauri` into a Tauri-free
-  crate so the Rune app starts the hub in-process; then Windows/macOS packaging.
+- `.scale(k)` scales about the **centre** and does not clip; anchor it with
+  `.origin(0.0, 0.0)` and clip on the parent, or the drawn subtree lands outside
+  a small container and looks empty.
+- A `row()` needs `.items_center()` (or `.center_y()`) for vertical centring.
+- Buttons need `.role("button") .label("…") .focusable(true)` for accessibility,
+  and `.no_window_drag()` if they sit inside a drag band.
+- Window actions are `on_press_tx(|s, tx| tx.minimize() / tx.toggle_maximized() /
+  tx.close_window())`.
+- Snapshot text comes from the real font stack; the mono face is used for
+  command/output blocks only.
 
+## Next steps, in order
 
+1. **Wire the hub into Rune** — `bionichat-core` is Tauri-free for exactly this.
+   Implement `EventSink` for Rune (push events into state, wake the app), start
+   `Hub::new(registry_path, port, Some(sink))` at launch, replace the fake
+   `State` with a snapshot from `hub.*()` getters.
+2. **Projects view real** — folder list from the registry's file roots.
+3. **Settings real** — tunnel start/stop, `Revoke`, autostart, paths.
+4. **Approval prompt** — the hub emits `approval-requested`; the window has no
+   UI for it yet. Nothing can approve an Ask policy in Rune today.
+5. **Title bar controls** — rendered and wired, never clicked on the live window.
+   Click-test, then claim it.
+6. Release path for Rune (bundle, strip, CI) — not started.
+
+## Traps that cost time before
+
+- `pkill -f "…bionichat-desktop"` kills your own shell (the pattern is in the
+  shell's cmdline). Use `ps -eo pid=,comm= | awk '$2 ~ /^bionichat-desk/ …'`.
+- GUI needs `DISPLAY=:0` and
+  `XAUTHORITY=/run/user/1000/selkies-session-tm5gmrs4/Xauthority`.
+- Do not run the Vite build and cargo at once in the Tauri app; touch
+  `src-tauri/build.rs` if the window is stale.
+- `src-tauri/tauri.conf.json` still lists `-p fs -p bash -p skill` in
+  `beforeBuildCommand`; the servers are one `core` server now.
+- Old hub tests keyed policies by server `fs`/`bash`/`skill`; they now use
+  `core`. Keep test server names in step with `registry::default_specs`.
+
+## Style rules the UI already follows
+
+Ground `#161616` (grey-1100), panels `#1a1a1a` (layer-01), alpha hairlines
+`#ffffff14`, text `#e6e6e6` / muted `#a0a0a0` / faint `#6b6b6b`, radius 10 panels
+and 6 rows, UI text 13 px (medium 530), mono for commands. Taken from OpenCode
+Desktop's own theme, not invented.
